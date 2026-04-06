@@ -1,0 +1,88 @@
+# ADES Project Workspace
+
+Semester workspace for the FEUP course "Data Analysis in Software Engineering" (2025/2026).
+
+## Project Goal
+
+Build a complete data analysis project around the chosen Zenodo dataset:
+[GitHub Pull Request Analysis: Sentiment Data and Developer Survey Responses](https://zenodo.org/records/10049493)
+
+Current locked research question:
+
+- "Can PR-level features help explain and predict PR merge outcomes on GitHub?"
+
+The assignment requires:
+
+- data collection and justification
+- preprocessing
+- exploratory data analysis
+- supervised and unsupervised ML tasks
+- proper evaluation and comparison
+- interpretation of findings
+- a commented notebook, datasets, and slides
+
+## Chosen Dataset
+
+The Zenodo record contains four CSV files:
+
+- `prfeatures_train_data.csv`
+- `prfeatures_test_data.csv`
+- `pr_comments_dataset_publish.csv`
+- `survey_responses_raw.csv`
+
+Locked Checkpoint 1 scope:
+
+1. Use `prfeatures_train_data.csv` as the main dataset.
+2. Use `prfeatures_test_data.csv` only for schema and label consistency checks.
+3. Exclude `pr_comments_dataset_publish.csv` for Checkpoint 1.
+4. Do not base the project on `survey_responses_raw.csv`.
+5. Use `merged_or_not` as the locked prediction target.
+
+Verified PRFeatures facts:
+
+- `prfeatures_train_data.csv`: `1,045,883` rows and `72` columns
+- `prfeatures_test_data.csv`: `260,195` rows and `72` columns
+- `merged_or_not` exists in both files
+- observed class imbalance is strong in both splits:
+  - train: `89.16%` merged, `10.84%` not merged
+  - test: `89.19%` merged, `10.81%` not merged
+
+## Repository Layout
+
+- `docs/` project notes, dataset notes, and Codex workflow guidance
+- `notebooks/` Colab notebook roadmap and exported notebooks
+- `data/raw/` downloaded original files
+- `data/interim/` cleaned intermediate outputs
+- `data/processed/` modeling-ready tables
+- `data/samples/` lighter subsets for fast iteration in Colab
+- `deliverables/checkpoint-1/` material for the April 10, 2026 checkpoint
+- `deliverables/checkpoint-2/` material for the May 15, 2026 checkpoint
+- `deliverables/final/` final notebook, dataset package, and support files
+- `slides/` slide decks and presentation assets
+
+## How We Should Use This Workspace
+
+- Work locally in VS Code for now; move the stabilized notebook flow to Colab later.
+- Export milestone notebooks back into `notebooks/` so the work is not trapped in Colab.
+- Use `data/samples/` for quick EDA and model iteration.
+- Only run full-dataset jobs once the pipeline is stable.
+- Ask Codex for help with notebook structure, cleaning logic, plots, model comparison, and interpretation.
+
+## Milestones
+
+- `2026-04-10` Checkpoint 1: problem framing, dataset choice, target audit, leakage-aware feature screening, initial EDA, presentation story
+- `2026-05-15` Checkpoint 2: cleaner pipeline, baseline models, evaluation plan, preliminary findings
+- `2026-06-08` Final submission: notebook, datasets, and updated slide deck
+- `2026-06-11` Final presentation and discussion
+
+## Immediate Next Step
+
+The fastest good start is:
+
+1. finish the Checkpoint 1 notebook around `prfeatures_train_data.csv`
+2. audit schema consistency and the target distribution
+3. document leakage-risk groups for the features
+4. run initial EDA on a conservative safe-feature subset
+5. extract slide-ready findings for the Checkpoint 1 presentation
+
+For the locked Checkpoint 1 context, see [docs/checkpoint-1-brief.md](docs/checkpoint-1-brief.md).
