@@ -68,6 +68,20 @@ Verified PRFeatures facts:
 - Only run full-dataset jobs once the pipeline is stable.
 - Ask Codex for help with notebook structure, cleaning logic, plots, model comparison, and interpretation.
 
+## Local VS Code Setup
+
+Use the project-local virtual environment so the notebook and VS Code share the same interpreter:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements-local.txt nbconvert
+```
+
+This workspace includes [`.vscode/settings.json`](/Users/tesssb/feup/ades-pr-merge-rate-predection/.vscode/settings.json), so VS Code should default to [`.venv/bin/python`](/Users/tesssb/feup/ades-pr-merge-rate-predection/.venv/bin/python) once the environment exists.
+
+Important: the CSVs in [`data/raw/`](/Users/tesssb/feup/ades-pr-merge-rate-predection/data/raw) are tracked with Git LFS. If you only have pointer files, pull the real data before running the notebook, or download the two PRFeatures CSVs from the Zenodo record linked above.
+
 ## Milestones
 
 - `2026-04-10` Checkpoint 1: problem framing, dataset choice, target audit, leakage-aware feature screening, initial EDA, presentation story
