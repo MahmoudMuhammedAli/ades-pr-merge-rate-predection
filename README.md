@@ -89,14 +89,13 @@ Important: the CSVs in [`data/raw/`](/Users/tesssb/feup/ades-pr-merge-rate-prede
 - `2026-06-08` Final submission: notebook, datasets, and updated slide deck
 - `2026-06-11` Final presentation and discussion
 
-## Immediate Next Step
+## Current Completion Status
 
-The fastest good start is:
+This branch contains the end-to-end project package:
 
-1. finish the Checkpoint 1 notebook around `prfeatures_train_data.csv`
-2. audit schema consistency and the target distribution
-3. document leakage-risk groups for the features
-4. run initial EDA on a conservative safe-feature subset
-5. extract slide-ready findings for the Checkpoint 1 presentation
+- Checkpoint 1 presentation notebook in `deliverables/checkpoint-1/`
+- Checkpoint 2 modeling notebook in `deliverables/checkpoint-2/`
+- Final analysis notebook, metric tables, cluster profiles, figures, and self-review in `deliverables/final/`
+- Final presentation source in `slides/final_presentation.md`
 
-For the locked Checkpoint 1 context, see [docs/checkpoint-1-brief.md](docs/checkpoint-1-brief.md).
+The remaining human-facing work is presentation rehearsal: use the final notebook outputs and slide source to explain leakage control, class imbalance, model comparison, clustering, final limitations, and why the findings are predictive/associational rather than causal.

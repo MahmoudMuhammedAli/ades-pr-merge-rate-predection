@@ -4,3 +4,8 @@ matplotlib
 seaborn
 jupyter
 ipykernel
+nbconvert
+scikit-learn
+imbalanced-learn
+xgboost
+pyarrow

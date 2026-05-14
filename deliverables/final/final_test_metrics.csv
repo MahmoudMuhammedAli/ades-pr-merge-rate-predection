@@ -1,0 +1,2 @@
+model,accuracy,balanced_accuracy,precision_not_merged,recall_not_merged,f1_not_merged,precision_merged,recall_merged,f1_merged,roc_auc_merged,average_precision_not_merged,tn_not_merged,fp_not_merged,fn_merged,tp_merged
+Random forest balanced,0.8110609350679299,0.6729241016473456,0.28520673813169983,0.4966929805845957,0.36234872952254954,0.9329893002556576,0.8491552227100956,0.8891004369570464,0.7355783097131158,0.3580880875704471,13968,14154,35007,197066

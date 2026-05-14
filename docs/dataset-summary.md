@@ -8,8 +8,14 @@
 Locked project framing:
 
 - research question: "Can PR-level features help explain and predict PR merge outcomes on GitHub?"
-- current milestone: Checkpoint 1
+- current completed package: Checkpoint 2 plus final analysis deliverables
 - main target: `merged_or_not`
+
+Final-package note:
+
+- Checkpoint 1 remains the historical scope lock for the first milestone.
+- The final notebooks extend that scope with leakage-aware supervised modeling, imbalance-aware evaluation, and K-means/PCA clustering in `deliverables/final/`.
+- The final modeling contract is: use only fields treated as available at PR submission, as historical/project snapshots before the current PR outcome, or as initial PR-diff features before closure. If a future source audit shows any retained field includes post-closure information, it should move to the timing-sensitive group.
 
 ## Files
 
