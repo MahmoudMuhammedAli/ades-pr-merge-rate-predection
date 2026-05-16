@@ -62,9 +62,10 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
+    precision_recall_curve,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import RepeatedStratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
@@ -128,6 +129,15 @@ candidate_safe_features = [
     "num_commits", "src_churn", "files_changed", "friday_effect",
 ]
 safe_usecols = [TARGET_COLUMN, *candidate_safe_features]
+
+questionable_timing_features = [
+    "open_pr_num", "pr_succ_rate", "requester_succ_rate", "test_churn"
+]
+strict_safe_features = [
+    feature for feature in candidate_safe_features
+    if feature not in questionable_timing_features
+]
+strict_safe_usecols = [TARGET_COLUMN, *strict_safe_features]
 
 binary_features = [
     "first_pr", "core_member", "test_inclusion", "ci_exists", "friday_effect"
@@ -206,32 +216,44 @@ def stratified_sample(df: pd.DataFrame, n: int, random_state: int = RANDOM_STATE
     return sample.reset_index(drop=True)
 
 
-def make_preprocessor() -> ColumnTransformer:
+def feature_type_groups(feature_list: list[str] | None = None) -> tuple[list[str], list[str], list[str]]:
+    selected_features = list(candidate_safe_features if feature_list is None else feature_list)
+    selected_binary = [feature for feature in binary_features if feature in selected_features]
+    selected_categorical = [feature for feature in categorical_features if feature in selected_features]
+    selected_numeric = [
+        feature for feature in selected_features
+        if feature not in selected_binary and feature not in selected_categorical
+    ]
+    return selected_numeric, selected_binary, selected_categorical
+
+
+def make_preprocessor(feature_list: list[str] | None = None) -> ColumnTransformer:
+    selected_numeric, selected_binary, selected_categorical = feature_type_groups(feature_list)
     return ColumnTransformer(
         transformers=[
             ("numeric", Pipeline([
                 ("imputer", SimpleImputer(strategy="median")),
                 ("scaler", StandardScaler()),
-            ]), numeric_features),
-            ("binary", SimpleImputer(strategy="most_frequent"), binary_features),
+            ]), selected_numeric),
+            ("binary", SimpleImputer(strategy="most_frequent"), selected_binary),
             ("categorical", Pipeline([
                 ("imputer", SimpleImputer(strategy="most_frequent")),
                 ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
-            ]), categorical_features),
+            ]), selected_categorical),
         ],
         remainder="drop",
         verbose_feature_names_out=False,
     )
 
 
-def build_models(y_train: pd.Series) -> dict[str, Pipeline]:
+def build_models(y_train: pd.Series, feature_list: list[str] | None = None) -> dict[str, Pipeline]:
     models: dict[str, Pipeline] = {
         "Dummy majority": Pipeline([
-            ("preprocess", make_preprocessor()),
+            ("preprocess", make_preprocessor(feature_list)),
             ("model", DummyClassifier(strategy="most_frequent")),
         ]),
         "Logistic regression balanced": Pipeline([
-            ("preprocess", make_preprocessor()),
+            ("preprocess", make_preprocessor(feature_list)),
             ("model", LogisticRegression(
                 max_iter=1000,
                 class_weight="balanced",
@@ -240,7 +262,7 @@ def build_models(y_train: pd.Series) -> dict[str, Pipeline]:
             )),
         ]),
         "Decision tree balanced": Pipeline([
-            ("preprocess", make_preprocessor()),
+            ("preprocess", make_preprocessor(feature_list)),
             ("model", DecisionTreeClassifier(
                 max_depth=10,
                 min_samples_leaf=80,
@@ -249,7 +271,7 @@ def build_models(y_train: pd.Series) -> dict[str, Pipeline]:
             )),
         ]),
         "Random forest balanced": Pipeline([
-            ("preprocess", make_preprocessor()),
+            ("preprocess", make_preprocessor(feature_list)),
             ("model", RandomForestClassifier(
                 n_estimators=80,
                 max_depth=14,
@@ -260,7 +282,7 @@ def build_models(y_train: pd.Series) -> dict[str, Pipeline]:
             )),
         ]),
         "Hist gradient boosting weighted": Pipeline([
-            ("preprocess", make_preprocessor()),
+            ("preprocess", make_preprocessor(feature_list)),
             ("model", HistGradientBoostingClassifier(
                 max_iter=140,
                 max_leaf_nodes=31,
@@ -274,7 +296,7 @@ def build_models(y_train: pd.Series) -> dict[str, Pipeline]:
         from xgboost import XGBClassifier
 
         models["XGBoost weighted"] = Pipeline([
-            ("preprocess", make_preprocessor()),
+            ("preprocess", make_preprocessor(feature_list)),
             ("model", XGBClassifier(
                 n_estimators=120,
                 max_depth=4,
@@ -294,16 +316,32 @@ def build_models(y_train: pd.Series) -> dict[str, Pipeline]:
     return models
 
 
-def score_pipeline(name: str, pipeline: Pipeline, X: pd.DataFrame, y: pd.Series) -> dict[str, object]:
-    y_pred = pipeline.predict(X)
+def score_merged_probability(pipeline: Pipeline, X: pd.DataFrame) -> np.ndarray:
     if hasattr(pipeline, "predict_proba"):
-        y_score_merged = pipeline.predict_proba(X)[:, 1]
+        return pipeline.predict_proba(X)[:, 1]
     elif hasattr(pipeline[-1], "decision_function"):
         decision = pipeline.decision_function(X)
-        y_score_merged = 1 / (1 + np.exp(-decision))
-    else:
-        y_score_merged = y_pred.astype(float)
+        return 1 / (1 + np.exp(-decision))
+    return pipeline.predict(X).astype(float)
 
+
+def predict_with_not_merged_threshold(
+    pipeline: Pipeline,
+    X: pd.DataFrame,
+    threshold: float,
+) -> np.ndarray:
+    score_not_merged = 1 - score_merged_probability(pipeline, X)
+    return np.where(score_not_merged >= threshold, 0, 1)
+
+
+def score_predictions(
+    name: str,
+    y: pd.Series,
+    y_pred: np.ndarray,
+    y_score_merged: np.ndarray,
+    threshold_label: str = "default_model_threshold",
+    threshold_value: float | None = None,
+) -> dict[str, object]:
     cm = confusion_matrix(y, y_pred, labels=[0, 1])
     try:
         roc_auc = roc_auc_score(y, y_score_merged)
@@ -316,6 +354,8 @@ def score_pipeline(name: str, pipeline: Pipeline, X: pd.DataFrame, y: pd.Series)
 
     return {
         "model": name,
+        "threshold_label": threshold_label,
+        "threshold_value": threshold_value,
         "accuracy": accuracy_score(y, y_pred),
         "balanced_accuracy": balanced_accuracy_score(y, y_pred),
         "precision_not_merged": precision_score(y, y_pred, pos_label=0, zero_division=0),
@@ -330,16 +370,59 @@ def score_pipeline(name: str, pipeline: Pipeline, X: pd.DataFrame, y: pd.Series)
         "fp_not_merged": int(cm[0, 1]),
         "fn_merged": int(cm[1, 0]),
         "tp_merged": int(cm[1, 1]),
+        "actual_not_merged": int(cm[0, :].sum()),
+        "predicted_not_merged": int(cm[:, 0].sum()),
+        "correct_not_merged": int(cm[0, 0]),
+        "missed_not_merged": int(cm[0, 1]),
+        "false_not_merged": int(cm[1, 0]),
+        "correct_merged": int(cm[1, 1]),
     }
+
+
+def score_pipeline(
+    name: str,
+    pipeline: Pipeline,
+    X: pd.DataFrame,
+    y: pd.Series,
+    threshold: float | None = None,
+    threshold_label: str = "default_model_threshold",
+) -> dict[str, object]:
+    y_score_merged = score_merged_probability(pipeline, X)
+    if threshold is None:
+        y_pred = pipeline.predict(X)
+        threshold_value = None
+    else:
+        y_pred = predict_with_not_merged_threshold(pipeline, X, threshold)
+        threshold_value = float(threshold)
+    return score_predictions(
+        name,
+        y,
+        y_pred,
+        y_score_merged,
+        threshold_label=threshold_label,
+        threshold_value=threshold_value,
+    )
+
+
+def fit_pipeline(name: str, pipeline: Pipeline, X_train: pd.DataFrame, y_train: pd.Series) -> Pipeline:
+    fitted_pipeline = clone(pipeline)
+    if name in {"XGBoost weighted", "Hist gradient boosting weighted"}:
+        sample_weight = compute_sample_weight(class_weight="balanced", y=y_train)
+        fitted_pipeline.fit(X_train, y_train, model__sample_weight=sample_weight)
+    else:
+        fitted_pipeline.fit(X_train, y_train)
+    return fitted_pipeline
 
 
 def fit_and_compare(
     train_df: pd.DataFrame,
     model_sample_size: int,
     validation_size: float = 0.25,
+    feature_list: list[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Pipeline], tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]]:
-    model_df = stratified_sample(train_df[safe_usecols], model_sample_size)
-    X = model_df[candidate_safe_features]
+    selected_features = list(candidate_safe_features if feature_list is None else feature_list)
+    model_df = stratified_sample(train_df[[TARGET_COLUMN, *selected_features]], model_sample_size)
+    X = model_df[selected_features]
     y = model_df[TARGET_COLUMN]
     X_train, X_valid, y_train, y_valid = train_test_split(
         X,
@@ -349,17 +432,12 @@ def fit_and_compare(
         random_state=RANDOM_STATE,
     )
 
-    models = build_models(y_train)
+    models = build_models(y_train, selected_features)
     fitted: dict[str, Pipeline] = {}
     rows: list[dict[str, object]] = []
 
     for name, pipeline in models.items():
-        fitted_pipeline = clone(pipeline)
-        if name in {"XGBoost weighted", "Hist gradient boosting weighted"}:
-            sample_weight = compute_sample_weight(class_weight="balanced", y=y_train)
-            fitted_pipeline.fit(X_train, y_train, model__sample_weight=sample_weight)
-        else:
-            fitted_pipeline.fit(X_train, y_train)
+        fitted_pipeline = fit_pipeline(name, pipeline, X_train, y_train)
         fitted[name] = fitted_pipeline
         rows.append(score_pipeline(name, fitted_pipeline, X_valid, y_valid))
 
@@ -368,6 +446,120 @@ def fit_and_compare(
         ascending=False,
     )
     return comparison.reset_index(drop=True), fitted, (X_train, X_valid, y_train, y_valid)
+
+
+def threshold_tuning_table(pipeline: Pipeline, X_valid: pd.DataFrame, y_valid: pd.Series) -> pd.DataFrame:
+    score_not_merged = 1 - score_merged_probability(pipeline, X_valid)
+    precision, recall, thresholds = precision_recall_curve(1 - y_valid, score_not_merged)
+    table = pd.DataFrame(
+        {
+            "threshold": thresholds,
+            "precision_not_merged": precision[:-1],
+            "recall_not_merged": recall[:-1],
+        }
+    )
+    table["f1_not_merged"] = (
+        2 * table["precision_not_merged"] * table["recall_not_merged"]
+        / (table["precision_not_merged"] + table["recall_not_merged"]).replace(0, np.nan)
+    ).fillna(0)
+    table = table.sort_values(
+        ["f1_not_merged", "recall_not_merged", "precision_not_merged"],
+        ascending=[False, False, False],
+    )
+    return table.reset_index(drop=True)
+
+
+def repeated_validation_summary(
+    train_df: pd.DataFrame,
+    model_sample_size: int,
+    feature_list: list[str] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    selected_features = list(candidate_safe_features if feature_list is None else feature_list)
+    cv_df = stratified_sample(train_df[[TARGET_COLUMN, *selected_features]], model_sample_size)
+    X = cv_df[selected_features]
+    y = cv_df[TARGET_COLUMN]
+    splitter = RepeatedStratifiedKFold(n_splits=3, n_repeats=2, random_state=RANDOM_STATE)
+    rows: list[dict[str, object]] = []
+    for fold_number, (train_idx, valid_idx) in enumerate(splitter.split(X, y), start=1):
+        X_train, X_valid = X.iloc[train_idx], X.iloc[valid_idx]
+        y_train, y_valid = y.iloc[train_idx], y.iloc[valid_idx]
+        for name, pipeline in build_models(y_train, selected_features).items():
+            fitted_pipeline = fit_pipeline(name, pipeline, X_train, y_train)
+            row = score_pipeline(name, fitted_pipeline, X_valid, y_valid)
+            row["fold"] = fold_number
+            rows.append(row)
+    fold_scores = pd.DataFrame(rows)
+    metric_columns = [
+        "accuracy", "balanced_accuracy", "precision_not_merged",
+        "recall_not_merged", "f1_not_merged", "roc_auc_merged",
+        "average_precision_not_merged",
+    ]
+    summary = (
+        fold_scores.groupby("model")[metric_columns]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
+    summary.columns = [
+        column[0] if column[1] == "" else f"{column[0]}_{column[1]}"
+        for column in summary.columns.to_flat_index()
+    ]
+    summary = summary.sort_values(
+        [
+            "f1_not_merged_mean",
+            "balanced_accuracy_mean",
+            "average_precision_not_merged_mean",
+        ],
+        ascending=False,
+    ).reset_index(drop=True)
+    summary.insert(1, "cv_folds", 6)
+    summary.insert(2, "model_sample_size", len(cv_df))
+    return summary, fold_scores
+
+
+def bootstrap_metric_intervals(
+    y_true: pd.Series,
+    y_pred: np.ndarray,
+    y_score_merged: np.ndarray,
+    threshold_label: str,
+    n_resamples: int = 500,
+    random_state: int = RANDOM_STATE,
+) -> pd.DataFrame:
+    rng = np.random.default_rng(random_state)
+    y_true_array = np.asarray(y_true)
+    y_pred_array = np.asarray(y_pred)
+    y_score_array = np.asarray(y_score_merged)
+    metric_rows: list[dict[str, float | str]] = []
+    samples: dict[str, list[float]] = {
+        "precision_not_merged": [],
+        "recall_not_merged": [],
+        "f1_not_merged": [],
+        "balanced_accuracy": [],
+        "roc_auc_merged": [],
+    }
+    for _ in range(n_resamples):
+        indices = rng.integers(0, len(y_true_array), len(y_true_array))
+        y_boot = y_true_array[indices]
+        pred_boot = y_pred_array[indices]
+        score_boot = y_score_array[indices]
+        samples["precision_not_merged"].append(precision_score(y_boot, pred_boot, pos_label=0, zero_division=0))
+        samples["recall_not_merged"].append(recall_score(y_boot, pred_boot, pos_label=0, zero_division=0))
+        samples["f1_not_merged"].append(f1_score(y_boot, pred_boot, pos_label=0, zero_division=0))
+        samples["balanced_accuracy"].append(balanced_accuracy_score(y_boot, pred_boot))
+        if len(np.unique(y_boot)) == 2:
+            samples["roc_auc_merged"].append(roc_auc_score(y_boot, score_boot))
+    for metric, values in samples.items():
+        clean_values = np.asarray([value for value in values if not pd.isna(value)])
+        metric_rows.append(
+            {
+                "threshold_label": threshold_label,
+                "metric": metric,
+                "estimate": float(np.mean(clean_values)),
+                "ci_lower_95": float(np.quantile(clean_values, 0.025)),
+                "ci_upper_95": float(np.quantile(clean_values, 0.975)),
+                "bootstrap_resamples": n_resamples,
+            }
+        )
+    return pd.DataFrame(metric_rows)
 
 
 def feature_names_from_pipeline(pipeline: Pipeline) -> np.ndarray:
@@ -637,6 +829,9 @@ def final_cells() -> list[nbf.NotebookNode]:
                 .sort_values("status")
             )
             display(feature_review)
+            display(Markdown(f'''
+            **Strict sensitivity feature set.** The primary model keeps `{len(candidate_safe_features)}` conservative features. A stricter sensitivity model removes `{", ".join(questionable_timing_features)}` because their exact measurement timestamp is easier to challenge. This creates a `{len(strict_safe_features)}`-feature check on whether the main conclusion depends on those timing assumptions.
+            '''))
             """
         ),
         md("## Exploratory data analysis on conservative features"),
@@ -703,12 +898,17 @@ def final_cells() -> list[nbf.NotebookNode]:
             plt.tight_layout()
             plt.savefig(FIGURE_DIR / "safe_feature_correlation.png", bbox_inches="tight")
             plt.show()
+
+            display(Markdown('''
+            **EDA interpretation.** The class imbalance is large enough that accuracy alone would reward models that mostly predict merges. The exploratory views show usable but moderate signal in PR size, contributor context, project scale, and historical success rates; none of these patterns should be read causally because the dataset is observational.
+            '''))
             """
         ),
         md("## Supervised modeling and validation comparison"),
         code(
             """
             MODEL_SAMPLE_SIZE = 260_000
+            CV_SAMPLE_SIZE = 120_000
             comparison, fitted_models, validation_data = fit_and_compare(train_model, MODEL_SAMPLE_SIZE)
             comparison.to_csv(FINAL_DIR / "model_comparison.csv", index=False)
             display(comparison)
@@ -730,7 +930,61 @@ def final_cells() -> list[nbf.NotebookNode]:
             plt.show()
 
             selected_model_name = comparison.iloc[0]["model"]
-            selected_model_name
+            X_train, X_valid, y_train, y_valid = validation_data
+            selected_validation_model = fitted_models[selected_model_name]
+
+            cv_summary, cv_fold_scores = repeated_validation_summary(train_model, CV_SAMPLE_SIZE)
+            cv_summary.to_csv(FINAL_DIR / "cross_validation_summary.csv", index=False)
+            cv_fold_scores.to_csv(FINAL_DIR / "cross_validation_fold_scores.csv", index=False)
+            display(cv_summary)
+
+            threshold_table = threshold_tuning_table(selected_validation_model, X_valid, y_valid)
+            threshold_table.to_csv(FINAL_DIR / "threshold_tuning.csv", index=False)
+            best_threshold = float(threshold_table.iloc[0]["threshold"])
+            tuned_validation_metrics = pd.DataFrame([
+                score_pipeline(selected_model_name, selected_validation_model, X_valid, y_valid),
+                score_pipeline(
+                    selected_model_name,
+                    selected_validation_model,
+                    X_valid,
+                    y_valid,
+                    threshold=best_threshold,
+                    threshold_label="validation_tuned_not_merged_f1",
+                ),
+            ])
+            display(tuned_validation_metrics)
+
+            threshold_plot = threshold_table.sort_values("threshold")
+            step = max(1, len(threshold_plot) // 2_000)
+            threshold_plot = threshold_plot.iloc[::step]
+            fig, ax = plt.subplots(figsize=(8, 5))
+            sns.lineplot(
+                data=threshold_plot.melt(
+                    id_vars="threshold",
+                    value_vars=["precision_not_merged", "recall_not_merged", "f1_not_merged"],
+                    var_name="metric",
+                    value_name="score",
+                ),
+                x="threshold",
+                y="score",
+                hue="metric",
+                ax=ax,
+            )
+            ax.axvline(best_threshold, color="black", linestyle="--", linewidth=1, label=f"selected={best_threshold:.3f}")
+            ax.set_title("Validation threshold tuning for not-merged F1")
+            ax.set_xlabel("Not-merged decision threshold")
+            ax.set_ylabel("Validation score")
+            ax.set_ylim(0, 1)
+            ax.legend()
+            plt.tight_layout()
+            plt.savefig(FIGURE_DIR / "threshold_tuning.png", bbox_inches="tight")
+            plt.show()
+
+            display(Markdown(f'''
+            **Model-selection interpretation.** The selected model is **{selected_model_name}**, chosen by validation not-merged F1 with balanced accuracy and not-merged average precision as secondary checks. The repeated 3x2 validation table is a stability check: it tests whether the ranking is plausible beyond one lucky internal split, but the final test split remains untouched here.
+
+            **Threshold rule.** The tuned not-merged threshold is `{best_threshold:.3f}` and was selected only from validation predictions. It is carried forward once to the test split, alongside default-threshold metrics, so the tuned result is not hidden inside model selection.
+            '''))
             """
         ),
         md("## Final evaluation on the untouched test split"),
@@ -742,20 +996,56 @@ def final_cells() -> list[nbf.NotebookNode]:
             X_test = test_model[candidate_safe_features]
             y_test = test_model[TARGET_COLUMN]
 
-            final_model = clone(build_models(y_final_train)[selected_model_name])
-            final_model.fit(X_final_train, y_final_train)
-            final_metrics = pd.DataFrame([score_pipeline(selected_model_name, final_model, X_test, y_test)])
+            final_model = fit_pipeline(
+                selected_model_name,
+                build_models(y_final_train, candidate_safe_features)[selected_model_name],
+                X_final_train,
+                y_final_train,
+            )
+            final_metrics = pd.DataFrame([
+                score_pipeline(selected_model_name, final_model, X_test, y_test),
+                score_pipeline(
+                    selected_model_name,
+                    final_model,
+                    X_test,
+                    y_test,
+                    threshold=best_threshold,
+                    threshold_label="validation_tuned_not_merged_f1",
+                ),
+            ])
             final_metrics.to_csv(FINAL_DIR / "final_test_metrics.csv", index=False)
             display(final_metrics)
 
-            cm = confusion_matrix(y_test, final_model.predict(X_test), labels=[0, 1])
-            cm_df = pd.DataFrame(cm, index=["Actual not merged", "Actual merged"], columns=["Predicted not merged", "Predicted merged"])
-            cm_df.to_csv(FINAL_DIR / "final_confusion_matrix.csv")
-            display(cm_df)
+            default_pred_test = final_model.predict(X_test)
+            tuned_pred_test = predict_with_not_merged_threshold(final_model, X_test, best_threshold)
+            final_score_merged = score_merged_probability(final_model, X_test)
+            confusion_rows = []
+            for label, predictions in {
+                "default_model_threshold": default_pred_test,
+                "validation_tuned_not_merged_f1": tuned_pred_test,
+            }.items():
+                cm = confusion_matrix(y_test, predictions, labels=[0, 1])
+                confusion_rows.append({
+                    "threshold_label": label,
+                    "actual_not_merged_predicted_not_merged": int(cm[0, 0]),
+                    "actual_not_merged_predicted_merged": int(cm[0, 1]),
+                    "actual_merged_predicted_not_merged": int(cm[1, 0]),
+                    "actual_merged_predicted_merged": int(cm[1, 1]),
+                })
+            final_confusion = pd.DataFrame(confusion_rows)
+            final_confusion.to_csv(FINAL_DIR / "final_confusion_matrix.csv", index=False)
+            display(final_confusion)
+
+            tuned_cm = confusion_matrix(y_test, tuned_pred_test, labels=[0, 1])
+            cm_df = pd.DataFrame(
+                tuned_cm,
+                index=["Actual not merged", "Actual merged"],
+                columns=["Predicted not merged", "Predicted merged"],
+            )
 
             fig, ax = plt.subplots(figsize=(5.5, 4.5))
             sns.heatmap(cm_df, annot=True, fmt=",d", cmap="Blues", ax=ax)
-            ax.set_title(f"Final test confusion matrix: {selected_model_name}")
+            ax.set_title(f"Final tuned-threshold confusion matrix: {selected_model_name}")
             plt.tight_layout()
             plt.savefig(FIGURE_DIR / "final_confusion_matrix.png", bbox_inches="tight")
             plt.show()
@@ -772,6 +1062,127 @@ def final_cells() -> list[nbf.NotebookNode]:
                 plt.tight_layout()
                 plt.savefig(FIGURE_DIR / "feature_importance.png", bbox_inches="tight")
                 plt.show()
+
+            ci_default = bootstrap_metric_intervals(
+                y_test,
+                default_pred_test,
+                final_score_merged,
+                threshold_label="default_model_threshold",
+                n_resamples=500,
+            )
+            ci_tuned = bootstrap_metric_intervals(
+                y_test,
+                tuned_pred_test,
+                final_score_merged,
+                threshold_label="validation_tuned_not_merged_f1",
+                n_resamples=500,
+            )
+            final_metric_confidence_intervals = pd.concat([ci_default, ci_tuned], ignore_index=True)
+            final_metric_confidence_intervals.to_csv(FINAL_DIR / "final_metric_confidence_intervals.csv", index=False)
+            display(final_metric_confidence_intervals)
+
+            strict_comparison, strict_fitted_models, strict_validation_data = fit_and_compare(
+                train_model,
+                MODEL_SAMPLE_SIZE,
+                feature_list=strict_safe_features,
+            )
+            X_strict_train, X_strict_valid, y_strict_train, y_strict_valid = strict_validation_data
+            strict_validation_model_name = (
+                selected_model_name if selected_model_name in strict_fitted_models
+                else strict_comparison.iloc[0]["model"]
+            )
+            strict_validation_metrics = score_pipeline(
+                strict_validation_model_name,
+                strict_fitted_models[strict_validation_model_name],
+                X_strict_valid,
+                y_strict_valid,
+            )
+
+            strict_final_df = stratified_sample(train_model[strict_safe_usecols], MODEL_SAMPLE_SIZE)
+            X_strict_final_train = strict_final_df[strict_safe_features]
+            y_strict_final_train = strict_final_df[TARGET_COLUMN]
+            X_strict_test = test_model[strict_safe_features]
+            strict_final_model = fit_pipeline(
+                strict_validation_model_name,
+                build_models(y_strict_final_train, strict_safe_features)[strict_validation_model_name],
+                X_strict_final_train,
+                y_strict_final_train,
+            )
+            strict_test_metrics = score_pipeline(
+                strict_validation_model_name,
+                strict_final_model,
+                X_strict_test,
+                y_test,
+            )
+            primary_validation_metrics = comparison[comparison["model"] == selected_model_name].iloc[0].to_dict()
+            primary_test_metrics = final_metrics[final_metrics["threshold_label"] == "default_model_threshold"].iloc[0].to_dict()
+            leakage_sensitivity = pd.DataFrame([
+                {
+                    "feature_set": "primary_safe_features",
+                    "evaluation_split": "validation",
+                    "excluded_timing_sensitive_features": "",
+                    **primary_validation_metrics,
+                },
+                {
+                    "feature_set": "strict_features",
+                    "evaluation_split": "validation",
+                    "excluded_timing_sensitive_features": ", ".join(questionable_timing_features),
+                    **strict_validation_metrics,
+                },
+                {
+                    "feature_set": "primary_safe_features",
+                    "evaluation_split": "test",
+                    "excluded_timing_sensitive_features": "",
+                    **primary_test_metrics,
+                },
+                {
+                    "feature_set": "strict_features",
+                    "evaluation_split": "test",
+                    "excluded_timing_sensitive_features": ", ".join(questionable_timing_features),
+                    **strict_test_metrics,
+                },
+            ])
+            leakage_sensitivity.to_csv(FINAL_DIR / "leakage_sensitivity.csv", index=False)
+            display(leakage_sensitivity[[
+                "feature_set", "evaluation_split", "model", "balanced_accuracy",
+                "precision_not_merged", "recall_not_merged", "f1_not_merged",
+                "average_precision_not_merged",
+            ]])
+
+            sample_size_rows = []
+            for requested_size in [100_000, 260_000, 500_000]:
+                actual_size = min(requested_size, len(train_model))
+                sample_df = stratified_sample(train_model[safe_usecols], actual_size, random_state=RANDOM_STATE + requested_size)
+                X_sample = sample_df[candidate_safe_features]
+                y_sample = sample_df[TARGET_COLUMN]
+                X_sample_train, X_sample_valid, y_sample_train, y_sample_valid = train_test_split(
+                    X_sample,
+                    y_sample,
+                    test_size=0.25,
+                    stratify=y_sample,
+                    random_state=RANDOM_STATE,
+                )
+                sample_model = fit_pipeline(
+                    selected_model_name,
+                    build_models(y_sample_train, candidate_safe_features)[selected_model_name],
+                    X_sample_train,
+                    y_sample_train,
+                )
+                row = score_pipeline(selected_model_name, sample_model, X_sample_valid, y_sample_valid)
+                row["requested_sample_size"] = requested_size
+                row["actual_sample_size"] = actual_size
+                sample_size_rows.append(row)
+            sample_size_sensitivity = pd.DataFrame(sample_size_rows)
+            sample_size_sensitivity.to_csv(FINAL_DIR / "sample_size_sensitivity.csv", index=False)
+            display(sample_size_sensitivity[[
+                "requested_sample_size", "actual_sample_size", "balanced_accuracy",
+                "precision_not_merged", "recall_not_merged", "f1_not_merged",
+                "average_precision_not_merged",
+            ]])
+
+            display(Markdown('''
+            **Final-test interpretation.** The default-threshold row is the direct model output. The tuned-threshold row applies a validation-selected rule that deliberately shifts the model toward finding more not-merged PRs. The strict-feature and sample-size tables are sensitivity checks: they test whether the central finding depends on borderline timing assumptions or a single training-sample size.
+            '''))
             """
         ),
         md("## Unsupervised analysis: clustering PR profiles"),
@@ -818,11 +1229,37 @@ def final_cells() -> list[nbf.NotebookNode]:
             )
             cluster_profile["merge_rate"] = (cluster_profile["merge_rate"] * 100).round(2)
             cluster_profile["not_merged_rate"] = (cluster_profile["not_merged_rate"] * 100).round(2)
+            size_median = cluster_profile["median_files_changed"].median()
+            team_median = cluster_profile["median_team_size"].median()
+            not_merged_median = cluster_profile["not_merged_rate"].median()
+            def label_cluster(row: pd.Series) -> str:
+                risk = "higher not-merged" if row["not_merged_rate"] >= not_merged_median else "lower not-merged"
+                size = "larger-change" if row["median_files_changed"] >= size_median else "smaller-change"
+                team = "larger-project" if row["median_team_size"] >= team_median else "smaller-project"
+                return f"{risk} / {size} / {team}"
+            cluster_profile["cluster_label"] = cluster_profile.apply(label_cluster, axis=1)
+            cluster_profile["interpretation"] = cluster_profile.apply(
+                lambda row: (
+                    f"Cluster {int(row['cluster'])} groups {row['cluster_label']} PRs. "
+                    f"It contains {int(row['pr_count']):,} sampled PRs with a {row['not_merged_rate']:.2f}% not-merged rate."
+                ),
+                axis=1,
+            )
             cluster_profile.to_csv(FINAL_DIR / "cluster_profile.csv", index=False)
             display(cluster_profile)
 
             pca = PCA(n_components=2, random_state=RANDOM_STATE)
             pca_points = pca.fit_transform(X_cluster)
+            pca_variance = pca.explained_variance_ratio_
+            cluster_interpretation = cluster_profile[[
+                "cluster", "cluster_label", "pr_count", "merge_rate",
+                "not_merged_rate", "interpretation",
+            ]].copy()
+            cluster_interpretation["pc1_explained_variance"] = pca_variance[0]
+            cluster_interpretation["pc2_explained_variance"] = pca_variance[1]
+            cluster_interpretation["two_component_explained_variance"] = pca_variance.sum()
+            cluster_interpretation.to_csv(FINAL_DIR / "cluster_interpretation.csv", index=False)
+            display(cluster_interpretation)
             plot_points = pd.DataFrame(
                 {
                     "pc1": pca_points[:, 0],
@@ -840,26 +1277,41 @@ def final_cells() -> list[nbf.NotebookNode]:
             plt.tight_layout()
             plt.savefig(FIGURE_DIR / "cluster_pca.png", bbox_inches="tight")
             plt.show()
+
+            display(Markdown(f'''
+            **Cluster interpretation.** The PCA figure is only a two-dimensional projection; PC1 and PC2 explain `{pca_variance.sum():.3f}` of the transformed feature variance. The clustering is therefore used as a profile summary, not as proof of naturally separated PR types. The labels make the profile differences explicit and keep the unsupervised section tied to the research question.
+            '''))
             """
         ),
         md("## Final interpretation"),
         code(
             """
             best_validation = comparison.iloc[0]
-            test_row = final_metrics.iloc[0]
+            default_test_row = final_metrics[final_metrics["threshold_label"] == "default_model_threshold"].iloc[0]
+            tuned_test_row = final_metrics[final_metrics["threshold_label"] == "validation_tuned_not_merged_f1"].iloc[0]
+            strict_test_row = leakage_sensitivity[
+                (leakage_sensitivity["feature_set"] == "strict_features")
+                & (leakage_sensitivity["evaluation_split"] == "test")
+            ].iloc[0]
             top_cluster = cluster_profile.sort_values("not_merged_rate", ascending=False).iloc[0]
             display(Markdown(f'''
-            **Final supervised result.** The selected model is **{selected_model_name}**, chosen by validation not-merged F1. On the untouched test split it reaches:
+            ### Answer to the Research Question
 
-            - Balanced accuracy: `{test_row["balanced_accuracy"]:.3f}`
-            - Not-merged precision: `{test_row["precision_not_merged"]:.3f}`
-            - Not-merged recall: `{test_row["recall_not_merged"]:.3f}`
-            - Not-merged F1: `{test_row["f1_not_merged"]:.3f}`
-            - Not-merged average precision: `{test_row["average_precision_not_merged"]:.3f}`
+            **Yes, PR-level features help explain and predict GitHub PR merge outcomes, but the signal is moderate and should be framed as predictive association rather than causality.** The selected model is **{selected_model_name}**, chosen by validation not-merged F1. On the untouched test split:
 
-            **Interpretation.** PR-level metadata and change-size features contain useful signal, but the class imbalance means raw accuracy is not enough. The analysis should be read as association and prediction, not causality.
+            - Default threshold balanced accuracy: `{default_test_row["balanced_accuracy"]:.3f}`
+            - Default threshold not-merged F1: `{default_test_row["f1_not_merged"]:.3f}`
+            - Tuned threshold: `{best_threshold:.3f}` from validation only
+            - Tuned threshold not-merged precision: `{tuned_test_row["precision_not_merged"]:.3f}`
+            - Tuned threshold not-merged recall: `{tuned_test_row["recall_not_merged"]:.3f}`
+            - Tuned threshold not-merged F1: `{tuned_test_row["f1_not_merged"]:.3f}`
+            - Tuned threshold not-merged average precision: `{tuned_test_row["average_precision_not_merged"]:.3f}`
 
-            **Unsupervised result.** K-means identified `{selected_k}` PR profile clusters without using the target during fitting. Cluster `{int(top_cluster["cluster"])}` has the highest observed not-merged rate after profiling (`{top_cluster["not_merged_rate"]:.2f}%`), which makes it useful for interpretation rather than a separate predictive model.
+            **Confidence intervals.** The bootstrap intervals in `final_metric_confidence_intervals.csv` quantify sampling uncertainty around the final predictions. They do not remove dataset or feature-timing bias, but they prevent the final notebook from over-reading tiny metric differences.
+
+            **Leakage sensitivity.** The strict-feature test removes `{", ".join(questionable_timing_features)}`. Its test not-merged F1 is `{strict_test_row["f1_not_merged"]:.3f}` versus `{default_test_row["f1_not_merged"]:.3f}` for the primary default-threshold model. If the strict result is lower, the conclusion becomes more conservative: safe PR metadata is predictive, but some performance is tied to timing assumptions that should be defended in presentation.
+
+            **Unsupervised result.** K-means identified `{selected_k}` PR profile clusters without using the target during fitting. Cluster `{int(top_cluster["cluster"])}` has the highest observed not-merged rate after profiling (`{top_cluster["not_merged_rate"]:.2f}%`) and is labeled `{top_cluster["cluster_label"]}`. This supports interpretation of PR profiles rather than serving as a separate predictor.
 
             **Threats to validity.** Feature timing remains the main risk. Discussion, sentiment, CI progression, and closure-derived variables were held back unless their availability before the outcome could be defended. The final model also uses a stratified training sample for runtime, so results should be framed as a reproducible course-scale analysis rather than an industrial deployment.
             '''))

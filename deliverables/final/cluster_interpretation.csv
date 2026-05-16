@@ -1,0 +1,3 @@
+cluster,cluster_label,pr_count,merge_rate,not_merged_rate,interpretation,pc1_explained_variance,pc2_explained_variance,two_component_explained_variance
+0,lower not-merged / larger-change / smaller-project,66400,89.56,10.44,"Cluster 0 groups lower not-merged / larger-change / smaller-project PRs. It contains 66,400 sampled PRs with a 10.44% not-merged rate.",0.1344253360690896,0.12175232022864575,0.25617765629773537
+1,higher not-merged / smaller-change / larger-project,3600,81.83,18.17,"Cluster 1 groups higher not-merged / smaller-change / larger-project PRs. It contains 3,600 sampled PRs with a 18.17% not-merged rate.",0.1344253360690896,0.12175232022864575,0.25617765629773537

@@ -165,32 +165,106 @@ Takeaway:
 
 ---
 
-## 11. Final Test Evaluation
+## 11. Repeated Validation and Threshold Tuning
+
+Repeated validation:
+
+- 3-fold, 2-repeat stratified cross-validation on a `120,000` row modeling sample.
+- Random forest remains strongest by mean not-merged F1: `0.381 ± 0.005`.
+- Histogram gradient boosting is close and has slightly stronger mean balanced accuracy and average precision, but the pre-declared selection rule prioritizes not-merged F1.
+
+Threshold tuning:
+
+- The selected not-merged decision threshold is `0.584`.
+- It was chosen on validation predictions only.
+- It is applied once to the untouched test split.
+
+---
+
+## 12. Final Test Evaluation
 
 Selected model: **Random forest balanced**
 
 Final holdout results on `prfeatures_test_data.csv`:
 
-| Metric | Value |
-|---|---:|
-| Accuracy | `0.811` |
-| Balanced accuracy | `0.673` |
-| Not-merged precision | `0.285` |
-| Not-merged recall | `0.497` |
-| Not-merged F1 | `0.362` |
-| ROC-AUC | `0.736` |
-| Not-merged average precision | `0.358` |
-
-Confusion matrix:
-
-|  | Predicted not merged | Predicted merged |
+| Metric | Default threshold | Tuned threshold |
 |---|---:|---:|
-| Actual not merged | `13,968` | `14,154` |
-| Actual merged | `35,007` | `197,066` |
+| Accuracy | `0.811` | `0.869` |
+| Balanced accuracy | `0.673` | `0.649` |
+| Not-merged precision | `0.285` | `0.390` |
+| Not-merged recall | `0.497` | `0.367` |
+| Not-merged F1 | `0.362` | `0.378` |
+| ROC-AUC | `0.736` | `0.736` |
+| Not-merged average precision | `0.358` | `0.358` |
+
+Interpretation:
+
+- Default threshold finds more not-merged PRs but creates more false alarms.
+- Tuned threshold improves not-merged precision and F1, while lowering not-merged recall.
+- Both rows must be reported because the tuned threshold is a validation decision, not a new model.
 
 ---
 
-## 12. Feature Importance
+## 13. Confidence Intervals
+
+Bootstrap confidence intervals use `500` resamples of final test predictions.
+
+Tuned-threshold 95% intervals:
+
+| Metric | Estimate | 95% CI |
+|---|---:|---:|
+| Not-merged precision | `0.390` | `0.384` to `0.396` |
+| Not-merged recall | `0.367` | `0.362` to `0.373` |
+| Not-merged F1 | `0.378` | `0.373` to `0.383` |
+| Balanced accuracy | `0.649` | `0.646` to `0.652` |
+| ROC-AUC | `0.735` | `0.732` to `0.739` |
+
+Interpretation:
+
+- The model has real predictive signal, but the intervals do not make it operationally reliable.
+- The precision/recall tradeoff is the honest story.
+
+---
+
+## 14. Leakage Sensitivity
+
+Strict feature set removed:
+
+- `open_pr_num`
+- `pr_succ_rate`
+- `requester_succ_rate`
+- `test_churn`
+
+| Evaluation | Primary F1 | Strict F1 | Primary balanced accuracy | Strict balanced accuracy |
+|---|---:|---:|---:|---:|
+| Validation | `0.399` | `0.391` | `0.704` | `0.699` |
+| Test | `0.362` | `0.354` | `0.673` | `0.667` |
+
+Takeaway:
+
+- The conclusion survives stricter timing assumptions, but slightly weakens.
+- This makes the final claim more credible: PR metadata has signal, but timing-sensitive project snapshots should be defended carefully.
+
+---
+
+## 15. Sample-Size Sensitivity
+
+Selected model trained at three stratified sample sizes:
+
+| Training sample | Validation balanced accuracy | Validation not-merged F1 | Not-merged AP |
+|---|---:|---:|---:|
+| `100,000` | `0.693` | `0.385` | `0.377` |
+| `260,000` | `0.704` | `0.399` | `0.405` |
+| `500,000` | `0.715` | `0.413` | `0.427` |
+
+Interpretation:
+
+- More data improves validation performance.
+- The submitted model remains sample-based for runtime, but this check shows the direction of improvement is sensible.
+
+---
+
+## 16. Feature Importance
 
 Top Random Forest signals:
 
@@ -209,10 +283,11 @@ Interpretation:
 
 - The model relies most on contributor history, project/repository context, and project size/activity signals.
 - No identifier or clear post-outcome leakage field appears in the final feature set.
+- Some high-importance fields are exactly why the strict-feature sensitivity analysis matters.
 
 ---
 
-## 13. Unsupervised Analysis
+## 17. Unsupervised Analysis
 
 Goal:
 
@@ -225,35 +300,40 @@ Method:
 - Choose `k = 2` by silhouette score.
 - Use PCA only for visualization.
 - Profile clusters after fitting using merge-rate composition.
+- PCA is visualization only; the first two components explain `25.6%` of transformed variance.
 
 ---
 
-## 14. Cluster Findings
+## 18. Cluster Findings
 
 | Cluster | Size | Merge rate | Not-merged rate | Profile |
 |---|---:|---:|---:|---|
-| 0 | `66,400` | `89.56%` | `10.44%` | typical smaller/project-average PR profile |
-| 1 | `3,600` | `81.83%` | `18.17%` | high-star, larger-team project profile with longer descriptions |
+| 0 | `66,400` | `89.56%` | `10.44%` | lower not-merged / larger-change / smaller-project |
+| 1 | `3,600` | `81.83%` | `18.17%` | higher not-merged / smaller-change / larger-project |
 
 Discussion:
 
 - Clustering is descriptive, not a separate prediction model.
 - The smaller cluster has a noticeably higher not-merged rate, suggesting project/profile context matters.
+- Because silhouette chose `k = 2` and one cluster dominates, this is useful interpretation rather than strong evidence of naturally separated groups.
 
 ---
 
-## 15. Final Conclusions
+## 19. Direct Answer
 
-- PR-level features do help predict merge outcomes better than a majority-class baseline.
-- Accuracy alone is misleading because the target is around `89%` merged.
-- The final Random Forest detects roughly half of not-merged PRs on the holdout split, but with low precision.
-- Contributor history, project context, and PR size/scope are the clearest recurring signals.
-- Leakage-aware feature selection is central to the validity of the result.
+Research question: Can PR-level features help explain and predict PR merge outcomes on GitHub?
+
+Answer:
+
+- Yes, but the signal is moderate.
+- The model beats the majority baseline on imbalance-aware metrics.
+- The best explanation is not "we can predict merges perfectly"; it is "contributor history, project context, and PR size/scope contain measurable signal."
+- The strict-feature sensitivity check shows the result is not entirely forced by questionable timing fields.
 - Findings support association and prediction, not causality.
 
 ---
 
-## 16. Threats to Validity
+## 20. Threats to Validity
 
 - Leakage risk: some fields may only be known after review or closure.
 - Temporal ambiguity: comment, CI, sentiment, and interaction fields may depend on when prediction is made.
@@ -264,7 +344,7 @@ Discussion:
 
 ---
 
-## 17. Discussion Prep
+## 21. Discussion Prep
 
 Likely questions and short answers:
 
@@ -282,3 +362,9 @@ Likely questions and short answers:
 
 - Are clusters predictive?  
   No. They describe PR profiles and support interpretation.
+
+- Did threshold tuning use the test split?  
+  No. The threshold was selected on validation data and then applied once to the test split.
+
+- Does the result disappear under stricter leakage assumptions?  
+  No. Test not-merged F1 drops from `0.362` to `0.354`, so the conclusion weakens slightly but survives.
