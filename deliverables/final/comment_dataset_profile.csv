@@ -1,0 +1,9 @@
+metric,value,interpretation
+raw_rows,588097,Comment-level rows available in the separate comment dataset.
+unique_repositories,25460,Unique owner/repository keys in the comment dataset.
+unique_repo_pr_keys,66281,Unique owner/repository/pull-number keys in the comment dataset.
+merged_comment_rows,463159,Comment rows labeled as merged by the comment dataset.
+not_merged_comment_rows,124938,Comment rows labeled as not merged by the comment dataset.
+mean_word_count,20.28717541494005,Average comment length in the comment dataset.
+mean_negative_valence,0.04085114870506056,Average negative sentiment score in published comments.
+joined_to_prfeatures,false,"The PRFeatures files expose numeric project/PR ids, while the comment file exposes owner/repo/pull number; no reliable local join key is present."

@@ -1,0 +1,7 @@
+feature_family,fields,remaining_assumption
+project workload,"open_pr_num, open_issue_num",Snapshot is treated as available at or before PR submission.
+project popularity/scale,"stars, fork_num, team_size, sloc",Snapshot/context fields may capture project-level differences as well as PR-level signal.
+test density,"test_lines_per_kloc, test_cases_per_kloc, asserts_per_kloc","Interpreted as project-level test-density context, not evidence caused by the current PR."
+initial PR diff,"churn_addition, churn_deletion, test_inclusion",Used as initial PR-scope information; close-time variants remain held back.
+integrator-assumed sensitivity,prior_review_num,Held out of the headline model because integrator/reviewer experience may not be available until a reviewer or closer is known.
+ultra-conservative subset,"first_pr, core_member, prior_interaction, followers, prev_pullreqs, account_creation_days, language, project_age, description_length, test_inclusion, ci_exists, friday_effect","Diagnostic subset strips out richer project scale, workload, density, and churn context to test whether the conclusion survives stricter timing assumptions."

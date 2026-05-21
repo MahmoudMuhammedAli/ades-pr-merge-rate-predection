@@ -1,0 +1,33 @@
+feature,feature_family,documented_timing,evidence,risk_level,model_role,source
+first_pr,contributor_history,pre-pr contributor history,Contributor first-PR flag before or at PR submission.,low,headline,MSR 2020 Table 1; GitLink README
+core_member,contributor_history,pre-pr contributor/project role,Contributor core-member flag before review outcome.,low,headline,MSR 2020 Table 1; GitLink README
+prior_interaction,contributor_history,historical interaction,Contributor-project interaction count from prior three months.,low,headline,MSR 2020 Table 1; GitLink README
+followers,contributor_history,profile snapshot,Contributor profile context at PR submission.,low,headline,GitLink README
+prev_pullreqs,contributor_history,pre-pr contributor history,Contributor previous PR count before the current PR.,low,headline,MSR 2020 Table 1; GitLink README
+account_creation_days,contributor_history,pre-pr contributor history,Account age at PR creation.,low,headline,MSR 2020 Table 1; GitLink README
+contrib_perc_commit,contributor_history,historical contribution share,Contributor share of project commits before the current PR outcome.,medium,headline,GitLink README
+sloc,project_context,submission-time project snapshot,Project source lines of code at PR submission.,low,headline,GitLink README
+team_size,project_context,submission-time project snapshot,Core developer count at PR submission.,low,headline,GitLink README
+language,project_context,project metadata,Main project language; encoded as nominal category.,low,headline,MSR 2020 Table 1; Zenodo record
+open_issue_num,project_context,submission-time project snapshot,Open issue count when submitting the PR.,low,headline,MSR 2020 Table 1; GitLink README
+project_age,project_context,submission-time project snapshot,Project age at PR creation.,low,headline,MSR 2020 Table 1; GitLink README
+open_pr_num,project_context,submission-time project snapshot,Open PR workload when submitting the PR.,low,headline,MSR 2020 Table 1; GitLink README
+fork_num,project_context,submission-time project snapshot,Fork count when submitting the PR.,low,headline,MSR 2020 Table 1; GitLink README
+test_lines_per_kloc,testing_context,submission-time project snapshot,Project test-code density at PR submission.,low,headline,MSR 2020 Table 1; GitLink README
+stars,project_context,submission-time project snapshot,Repository star/watch count at PR submission.,low,headline,MSR 2020 Table 1; GitLink README
+test_cases_per_kloc,testing_context,submission-time project snapshot,Project test-case density at PR submission.,low,headline,MSR 2020 Table 1; GitLink README
+asserts_per_kloc,testing_context,submission-time project snapshot,Project assertion density at PR submission.,low,headline,MSR 2020 Table 1; GitLink README
+perc_external_contribs,project_context,submission-time project snapshot,External contributor percentage at PR submission.,low,headline,GitLink README
+churn_addition,pr_scope,submission-time PR diff,Added lines at PR submission according to field README.,low,headline,MSR 2020 Table 1; GitLink README
+churn_deletion,pr_scope,submission-time PR diff,Deleted lines at PR submission according to field README.,low,headline,MSR 2020 Table 1; GitLink README
+description_length,pr_scope,submission-time PR text,PR description length available at submission.,low,headline,MSR 2020 Table 1; GitLink README
+test_inclusion,testing_context,submission-time PR diff,Whether the submitted PR includes test code.,low,headline,MSR 2020 Table 1; GitLink README
+ci_exists,testing_context,"CI presence, not CI result",Whether the PR/repository uses CI; CI outcome fields remain held back.,medium,headline,MSR 2020 Table 1; GitLink README
+friday_effect,calendar,submission-time calendar,Whether PR was submitted on Friday.,low,headline,GitLink README
+prior_review_num,integrator_assumed,integrator history,Prior reviews of an integrator; held back because the eventual integrator may be unknown at prediction time.,high,sensitivity_only,MSR 2020 Table 1; TSE 2022
+pr_succ_rate,target_adjacent,historical project outcome rate,Project PR acceptance rate; held back as target-adjacent unless pre-PR computation is verified.,high,sensitivity_only,MSR 2020 Table 1; GitLink README
+requester_succ_rate,target_adjacent,historical requester outcome rate,Contributor PR success rate; held back as target-adjacent unless pre-PR computation is verified.,high,sensitivity_only,GitLink README
+num_commits,close_time_pr_evolution,close-time PR state,Commit count at PR close; not part of headline model.,high,sensitivity_only,GitLink README
+src_churn,close_time_pr_evolution,close-time PR state,Source churn at PR close; not part of headline model.,high,sensitivity_only,GitLink README
+files_changed,close_time_pr_evolution,close-time PR state,Changed file count at PR close; not part of headline model.,high,sensitivity_only,GitLink README
+test_churn,close_time_pr_evolution,close-time PR state,Test churn at PR close; not part of headline model.,high,sensitivity_only,GitLink README

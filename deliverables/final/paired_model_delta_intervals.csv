@@ -1,0 +1,3 @@
+baseline_model,comparison_model,metric,delta,ci_lower_95,ci_upper_95,bootstrap_mean,bootstrap_resamples,interpretation
+Random forest balanced,Hist gradient boosting weighted,f1_not_merged,0.03469209605039891,0.03260713338297907,0.03668163170365702,0.034688315646689026,400,Positive delta favors the selected Random Forest baseline over the comparison model.
+Random forest balanced,Hist gradient boosting weighted,average_precision_not_merged,0.02937327261014705,0.02719768527293338,0.031396180910043286,0.029293800310987324,400,Positive delta favors the selected Random Forest baseline over the comparison model.

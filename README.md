@@ -62,11 +62,10 @@ Verified PRFeatures facts:
 
 ## How We Should Use This Workspace
 
-- Work locally in VS Code for now; move the stabilized notebook flow to Colab later.
-- Export milestone notebooks back into `notebooks/` so the work is not trapped in Colab.
-- Use `data/samples/` for quick EDA and model iteration.
-- Only run full-dataset jobs once the pipeline is stable.
-- Ask Codex for help with notebook structure, cleaning logic, plots, model comparison, and interpretation.
+- Treat `scripts/build_analysis_notebooks.py` as the source for the checkpoint and final notebooks.
+- Re-run the final notebook, report builder, validator, and slide export before submission.
+- Use the generated CSVs in `deliverables/final/` as the source of truth for final metrics and speaking points.
+- Keep the headline claim bounded to moderate predictive association, not causality or automated merge decisions.
 
 ## Local VS Code Setup
 
@@ -78,9 +77,9 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements-local.txt nbconvert
 ```
 
-This workspace includes [`.vscode/settings.json`](/Users/tesssb/feup/ades-pr-merge-rate-predection/.vscode/settings.json), so VS Code should default to [`.venv/bin/python`](/Users/tesssb/feup/ades-pr-merge-rate-predection/.venv/bin/python) once the environment exists.
+This workspace includes `.vscode/settings.json`, so VS Code should default to `.venv/bin/python` once the environment exists.
 
-Important: the CSVs in [`data/raw/`](/Users/tesssb/feup/ades-pr-merge-rate-predection/data/raw) are tracked with Git LFS. If you only have pointer files, pull the real data before running the notebook, or download the two PRFeatures CSVs from the Zenodo record linked above.
+Important: the CSVs in `data/raw/` are tracked with Git LFS. If you only have pointer files, pull the real data before running the notebook, or download the PRFeatures CSVs from the Zenodo record linked above.
 
 ## Milestones
 
@@ -95,7 +94,7 @@ This branch contains the end-to-end project package:
 
 - Checkpoint 1 presentation notebook in `deliverables/checkpoint-1/`
 - Checkpoint 2 modeling notebook in `deliverables/checkpoint-2/`
-- Final analysis notebook, metric tables, cluster profiles, figures, and self-review in `deliverables/final/`
-- Final presentation source in `slides/final_presentation.md`
+- Final analysis notebook, report, metric tables, cluster profiles, figures, and self-review in `deliverables/final/`
+- Final presentation source/PDF in `slides/`
 
-The remaining human-facing work is presentation rehearsal: use the final notebook outputs and slide source to explain leakage control, class imbalance, model comparison, clustering, final limitations, and why the findings are predictive/associational rather than causal.
+The remaining human-facing work is presentation rehearsal: use the final notebook outputs and slide source to explain the feature-availability contract, class imbalance, model comparison, stress tests, clustering limits, and why the findings are predictive/associational rather than causal.

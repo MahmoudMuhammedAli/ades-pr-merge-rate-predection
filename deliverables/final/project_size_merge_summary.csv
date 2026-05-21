@@ -1,0 +1,5 @@
+size_bin,project_count,median_pr_count,median_not_merged_rate
+large,2121,54.0,5.769
+medium,2055,21.0,5.263
+small,2255,6.0,0.0
+very_large,2131,214.0,6.706

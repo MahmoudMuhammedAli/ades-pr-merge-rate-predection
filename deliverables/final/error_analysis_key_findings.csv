@@ -1,0 +1,5 @@
+finding,evidence,interpretation
+Predicted risk ranks concentrate not-merged outcomes,Top risk decile actual not-merged rate 33.28% vs baseline 10.81% and lowest decile 2.72%.,The model is more defensible as a risk-ranking signal than as a precise decision rule.
+Missed not-merged PRs receive lower risk scores than caught not-merged PRs,Mean not-merged score 0.418 for missed not-merged PRs vs 0.728 for correctly flagged not-merged PRs.,The main failure mode is ambiguous not-merged cases that look similar to merged PRs under available features.
+False not-merged predictions are concentrated in busier or larger project contexts,False not-merged median open PRs 35 and stars 608 vs correct-merged medians 10 and 92.,Project context is useful but can make accepted PRs in large/busy repositories look risky.
+Scores are imperfectly calibrated,Weighted mean absolute calibration error 0.308; Brier score for not-merged score 0.187.,"Predicted scores should be treated as ranking evidence, not literal probabilities."

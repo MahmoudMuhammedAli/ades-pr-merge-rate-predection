@@ -1,0 +1,15 @@
+split,check,value
+train,rows,1045883.0
+train,columns_loaded,68.0
+train,explicit_null_cells,0.0
+train,duplicate_loaded_rows,0.0
+train,not_merged_rate_pct,10.837254262666097
+train,project_count,8562.0
+train,creator_count,44012.0
+test,rows,260195.0
+test,columns_loaded,68.0
+test,explicit_null_cells,0.0
+test,duplicate_loaded_rows,0.0
+test,not_merged_rate_pct,10.808047810296129
+test,project_count,5837.0
+test,creator_count,17669.0

@@ -1,0 +1,3 @@
+entity,train_unique,test_unique,overlap_unique,test_unique_overlap_pct,test_rows_with_seen_entity,test_rows_with_seen_entity_pct
+project_id,8562,5837,5540,94.91176974473188,254606,97.85199561867061
+creator_id,44012,17669,12260,69.38706208613957,218797,84.08962508887565

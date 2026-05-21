@@ -1,0 +1,13 @@
+split,entity,top_n,unique_entities,rows_covered,row_pct
+train,project_id,10,8562,48819,4.668
+train,project_id,100,8562,243467,23.279
+train,project_id,500,8562,544208,52.033
+train,creator_id,10,44012,13956,1.334
+train,creator_id,100,44012,82524,7.89
+train,creator_id,500,44012,226446,21.651
+test,project_id,10,5837,13914,5.348
+test,project_id,100,5837,68304,26.251
+test,project_id,500,5837,149390,57.415
+test,creator_id,10,17669,8951,3.44
+test,creator_id,100,17669,38727,14.884
+test,creator_id,500,17669,91551,35.186

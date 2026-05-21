@@ -1,370 +1,476 @@
+---
+marp: true
+theme: default
+paginate: true
+size: 16:9
+---
+
+<style>
+section {
+  font-size: 25px;
+  padding: 44px 56px;
+}
+h1 { font-size: 44px; line-height: 1.08; }
+h2 { font-size: 34px; margin-bottom: 18px; }
+h3 { font-size: 25px; margin: 0 0 10px; }
+table { font-size: 18px; }
+li { margin: 0.18em 0; }
+.small { font-size: 21px; }
+.tiny { font-size: 16px; }
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  align-items: start;
+}
+.metric {
+  font-size: 40px;
+  font-weight: 700;
+}
+.muted { color: #4b5563; }
+img {
+  display: block;
+  object-fit: contain;
+  max-width: 100%;
+}
+</style>
+
 # Can PR-Level Features Explain and Predict GitHub PR Merge Outcomes?
 
-FEUP ADES final presentation source  
-Research question: Can PR-level features help explain and predict PR merge outcomes on GitHub?
+**Answer:** yes, but only as **moderate predictive association**.
+
+- Headline model: **Random forest balanced**
+- Feature contract: **25 leakage-safer PR-level features**
+- Official test not-merged F1: **0.314** default, **0.326** validation-tuned
+- Review-process contract F1: **0.436**, showing later process signal
+- Claim boundary: **not causal**, **not deployment-ready**, weaker under stricter generalization
 
 ---
 
-## 1. Problem
+## Research Design
 
-- GitHub pull requests are not merged at equal rates.
-- The project studies whether PR-level metadata, contributor context, project context, and PR-size features are associated with merge outcomes.
-- Framing is predictive and explanatory, not causal.
+| Decision | Final choice |
+|---|---|
+| Question | Can PR-level features explain and predict merge outcomes? |
+| Target | `merged_or_not` |
+| Main data | PRFeatures train/test files |
+| Headline claim | Early/submission-time feature association |
+| Main risk | Feature timing and project/creator overlap |
 
-Target:
-
-- `merged_or_not`
-- `1`: merged
-- `0`: not merged
-
----
-
-## 2. Dataset and Scope
-
-Source: Zenodo PRFeatures dataset from "GitHub Pull Request Analysis: Sentiment Data and Developer Survey Responses".
-
-Used:
-
-- `prfeatures_train_data.csv`: main analysis and model-development split
-- `prfeatures_test_data.csv`: final holdout evaluation split
-
-Not used as core inputs:
-
-- `pr_comments_dataset_publish.csv`: comment-level data, kept out because timing can create leakage risk
-- `survey_responses_raw.csv`: only 22 responses, not suitable as the main dataset
+The project is framed as an empirical data-analysis study, not a merge-decision product.
 
 ---
 
-## 3. Dataset Audit
+## Dataset and Scope
 
-- Train split: `1,045,883` rows, `72` columns
-- Test split: `260,195` rows, `72` columns
-- Train and test contain the same columns in the same order
-- `merged_or_not` is present in both files
-- Final notebook audit found `0` explicit nulls and `0` duplicate rows in both splits
+Source: Zenodo PRFeatures dataset from *GitHub Pull Request Analysis: Sentiment Data and Developer Survey Responses*.
 
-Implication:
+| File | Role | Rows | Columns |
+|---|---|---:|---:|
+| `prfeatures_train_data.csv` | model development / final training | 1,045,883 | 72 |
+| `prfeatures_test_data.csv` | untouched official test | 260,195 | 72 |
+| `pr_comments_dataset_publish.csv` | profiled, not joined | 588,097 | 15 |
+| `survey_responses_raw.csv` | documented, not main model source | 22 | 56 |
 
-- The data is large enough for modeling, but leakage and imbalance matter more than raw row count.
+The comment file lacks the numeric PRFeatures join keys, so it is profiled rather than force-joined.
 
 ---
 
-## 4. Target Imbalance
+## Target and Data Characteristics
+
+![h:280px](../deliverables/final/figures/target_distribution.png)
 
 | Split | Merged | Not merged |
 |---|---:|---:|
-| Train | `932,538` (`89.16%`) | `113,345` (`10.84%`) |
-| Test | `232,073` (`89.19%`) | `28,122` (`10.81%`) |
+| Train | 932,538 (89.16%) | 113,345 (10.84%) |
+| Test | 232,073 (89.19%) | 28,122 (10.81%) |
 
-Why this matters:
-
-- A majority-class model reaches about `89%` accuracy while detecting no not-merged PRs.
-- Evaluation must include minority-class recall/F1, balanced accuracy, average precision, ROC-AUC, and the confusion matrix.
+Accuracy alone is misleading: a majority baseline has 89% accuracy and 0 not-merged recall.
 
 ---
 
-## 5. Leakage-Safe Feature Selection
+## Feature-Availability Contract
 
-| Group | Decision | Examples |
+| Feature group | Treatment | Reason |
 |---|---|---|
-| Identifiers | Exclude | `id`, `project_id`, `creator_id`, `last_closer_id` |
-| Post-outcome fields | Exclude | `last_close_time`, `lifetime_minutes`, `reopen_or_not` |
-| Timing-sensitive fields | Hold back | comments, sentiment, CI outcomes, interaction fields |
-| Lower-risk PR-level fields | Use | contributor history, project context, PR size |
+| Direct identifiers | Excluded | identity can memorize ecosystems |
+| Post-outcome fields | Excluded | close-time and lifetime variables leak outcome process |
+| Comments/sentiment/CI outcomes | Excluded | can encode review process after submission |
+| `prior_review_num` | Sensitivity only | reviewer/integrator-context assumption |
+| Headline features | Used | contributor history, project context, PR scope, testing context |
 
-Principle:
-
-- The model should only use information plausibly available before the final merge decision.
-- Retained rate/workload fields are interpreted as historical or PR-submission snapshots. If a field cannot be defended under that timing contract, it should move to the timing-sensitive group.
+This is a defensible early-information model, not the highest possible metric model.
 
 ---
 
-## 6. Modeling Feature Set
+## Professor Defense Spine
 
-Conservative feature families:
+| Likely challenge | Answer we defend |
+|---|---|
+| Are you forcing a result? | No. The headline result is moderate, and stronger T2 results are labeled later-stage. |
+| Is there leakage? | Direct ids, post-outcome fields, comments, CI outcomes, and risky success-rate fields are excluded or sensitivity-only. |
+| Does the math make sense? | Metrics are confusion-matrix based, validation-selected, and checked against the untouched official test. |
+| Does it generalize? | Partially. Official PR ids are clean, but project/creator overlap limits external validity. |
+| What is the answer? | PR-level signal exists, but prediction strength depends on feature availability. |
 
-- Contributor context: `first_pr`, `core_member`, `prior_review_num`, `prior_interaction`, `followers`, `prev_pullreqs`
-- Project context: `team_size`, `language`, `open_issue_num`, `project_age`, `open_pr_num`, `fork_num`, `stars`
-- Historical rates: `pr_succ_rate`, `requester_succ_rate`, `perc_external_contribs`
-- PR size/scope: `churn_addition`, `churn_deletion`, `src_churn`, `files_changed`, `num_commits`
-- Testing/CI availability: `test_inclusion`, `ci_exists`, test-density and churn fields
-
-`language` is treated as categorical, not ordinal.
-
-Prediction-time contract:
-
-- Historical features such as `pr_succ_rate` and `requester_succ_rate` are used as past success context, not as current-PR outcomes.
-- Workload fields such as `open_pr_num` are used as project snapshots at or before PR submission.
-- Diff fields such as `files_changed`, `src_churn`, and `test_churn` are used as initial submitted PR content, not as closure information.
+This is the line to hold in Q&A.
 
 ---
 
-## 7. EDA Finding: PR Size
+## EDA Findings
 
-| Feature | Not merged mean | Merged mean |
+| Finding | Evidence |
+|---|---|
+| First PRs are riskier | 19.32% not merged vs 10.55% for non-first PRs |
+| Core members differ | 9.21% not merged vs 17.44% for non-core contributors |
+| Prior project history matters | median previous PRs: 22 not-merged vs 41 merged |
+| Project concentration is high | top 500 projects contain 52.03% of training rows |
+| CI presence differs | 9.91% not merged with CI vs 12.95% without CI |
+
+These are associations in observational data, not causal effects.
+
+---
+
+## EDA Evidence
+
+![h:360px](../deliverables/final/figures/eda_safe_feature_patterns.png)
+
+EDA supports the modeling story: class imbalance, contributor context, project scale, and repeated entities all matter.
+
+---
+
+## Model Design and Algorithm Comprehension
+
+| Method | Why used | Limitation |
+|---|---|---|
+| Dummy majority | exposes class-imbalance trap | detects no not-merged PRs |
+| Logistic regression | interpretable weighted linear baseline | weak on interactions |
+| Decision tree | simple non-linear rules | unstable if unconstrained |
+| Random forest | averages balanced trees | importance is not causal |
+| Histogram gradient boosting | boosted supervised comparator | close, but lower primary F1 |
+| K-means + PCA | unsupervised profile analysis | interpretive, not predictive |
+
+Selection rule: maximize **not-merged F1** on internal validation, then retrain once on all training rows.
+
+---
+
+## Validation Comparison
+
+![h:315px](../deliverables/final/figures/model_comparison.png)
+
+| Model | Balanced acc. | Not-merged recall | Not-merged F1 | ROC-AUC |
+|---|---:|---:|---:|---:|
+| Random forest balanced | 0.702 | 0.602 | 0.372 | 0.778 |
+| Histogram gradient boosting | 0.690 | 0.644 | 0.337 | 0.759 |
+| Logistic regression balanced | 0.610 | 0.595 | 0.254 | 0.655 |
+| Dummy majority | 0.500 | 0.000 | 0.000 | 0.500 |
+
+---
+
+## Threshold Tuning and Final Test
+
+<div class="columns">
+<div>
+
+![h:290px](../deliverables/final/figures/threshold_tuning.png)
+
+</div>
+<div>
+
+| Metric | Default | Tuned |
 |---|---:|---:|
-| `files_changed` | `15.44` | `10.91` |
-| `churn_addition` | `618.55` | `412.57` |
-| `description_length` | `59.92` | `45.95` |
-| `num_commits` | `4.70` | `3.98` |
+| Accuracy | 0.756 | 0.838 |
+| Balanced acc. | 0.650 | 0.629 |
+| Precision, not merged | 0.225 | 0.296 |
+| Recall, not merged | 0.515 | 0.364 |
+| F1, not merged | 0.314 | 0.326 |
+| Avg precision, not merged | 0.301 | 0.301 |
 
-Interpretation:
+</div>
+</div>
 
-- Non-merged PRs are larger on average across several size/scope indicators.
-- This is association, not proof that large PRs cause rejection.
-
----
-
-## 8. EDA Finding: Contributor Context
-
-| Feature/value | Merge rate |
-|---|---:|
-| Repeat contributor PRs (`first_pr = 0`) | `89.45%` |
-| First-time contributor PRs (`first_pr = 1`) | `80.68%` |
-| Core-member PRs (`core_member = 1`) | `90.79%` |
-| Non-core-member PRs (`core_member = 0`) | `82.56%` |
-
-Interpretation:
-
-- Contributor history and project role are strongly associated with merge outcomes.
+Tuned threshold: `0.578`, selected on validation predictions only.
 
 ---
 
-## 9. Supervised Modeling Design
+## Final Confusion Matrix
 
-Models compared on an internal validation split from the training file:
+![h:350px](../deliverables/final/figures/final_confusion_matrix.png)
 
-- Dummy majority baseline
-- Logistic regression with class weights
-- Decision tree with class weights
-- Random forest with balanced subsampling
-- Histogram gradient boosting with balanced sample weights
-- XGBoost was included as optional, but skipped locally because `libomp.dylib` was unavailable
+Tuned-threshold counts:
 
-Selection criterion:
+| Correct not merged | Missed not merged | False not merged | Correct merged |
+|---:|---:|---:|---:|
+| 10,234 | 17,888 | 24,393 | 207,680 |
 
-- Primary: not-merged F1
-- Secondary: balanced accuracy and not-merged average precision
+The model finds signal, but it is not reliable enough for automated decisions.
 
 ---
 
-## 10. Validation Model Comparison
+## Prediction-Time Contracts
 
-| Model | Accuracy | Balanced accuracy | Not-merged recall | Not-merged F1 | ROC-AUC |
-|---|---:|---:|---:|---:|---:|
-| Random forest balanced | `0.817` | `0.704` | `0.560` | `0.399` | `0.784` |
-| Hist gradient boosting weighted | `0.775` | `0.711` | `0.629` | `0.377` | `0.783` |
-| Decision tree balanced | `0.742` | `0.666` | `0.570` | `0.324` | `0.728` |
-| Logistic regression balanced | `0.638` | `0.626` | `0.612` | `0.268` | `0.674` |
-| Dummy majority | `0.892` | `0.500` | `0.000` | `0.000` | `0.500` |
+| Contract | What is allowed | Test F1 | Test AP |
+|---|---|---:|---:|
+| T0 creation | history, project snapshots, description | 0.311 | 0.302 |
+| T1 submitted diff | T0 + initial diff/test inclusion | 0.314 | 0.301 |
+| T2 review process | T1 + comments, CI progress, integrator context | 0.436 | 0.479 |
 
-Takeaway:
+This is the upgraded answer: stronger metrics require later review-process information.
 
-- The dummy baseline has high accuracy but zero not-merged recall/F1.
-- Random forest gives the best not-merged F1 on validation.
+The early model is still moderate; the late model shows where extra signal enters.
 
 ---
 
-## 11. Repeated Validation and Threshold Tuning
+## Risk Ranking, Not Certainty
 
-Repeated validation:
+<div class="columns">
+<div>
 
-- 3-fold, 2-repeat stratified cross-validation on a `120,000` row modeling sample.
-- Random forest remains strongest by mean not-merged F1: `0.381 ± 0.005`.
-- Histogram gradient boosting is close and has slightly stronger mean balanced accuracy and average precision, but the pre-declared selection rule prioritizes not-merged F1.
+![h:315px](../deliverables/final/figures/risk_band_lift.png)
 
-Threshold tuning:
+</div>
+<div>
 
-- The selected not-merged decision threshold is `0.584`.
-- It was chosen on validation predictions only.
-- It is applied once to the untouched test split.
+- The score is most defensible as **relative risk**, not a literal probability.
+- High predicted-risk bands should contain more not-merged PRs than the baseline.
+- Calibration is checked separately so the project does not overclaim probability quality.
+
+![h:145px](../deliverables/final/figures/calibration_curve.png)
+
+</div>
+</div>
+
+Professor-facing claim: the model can rank risk better than chance, but it cannot make reliable merge decisions.
 
 ---
 
-## 12. Final Test Evaluation
+## Calibration Upgrade
 
-Selected model: **Random forest balanced**
+![h:260px](../deliverables/final/figures/calibration_model_comparison.png)
 
-Final holdout results on `prfeatures_test_data.csv`:
+| Method | Brier | Cal. error | AP | F1 |
+|---|---:|---:|---:|---:|
+| Uncalibrated | 0.175 | 0.292 | 0.326 | 0.345 |
+| Sigmoid | 0.086 | 0.004 | 0.326 | 0.123 |
+| Isotonic | 0.086 | 0.005 | 0.314 | 0.136 |
 
-| Metric | Default threshold | Tuned threshold |
+Calibration fixes probability honesty. It does not optimize F1, and calibrated default-threshold F1 drops because the not-merged base rate is only about 11%.
+
+---
+
+## Where the Model Fails
+
+<div class="columns">
+<div>
+
+![h:330px](../deliverables/final/figures/error_profile.png)
+
+</div>
+<div class="small">
+
+- **Missed not-merged PRs:** not-merged cases that look too similar to merged PRs under the available features.
+- **False not-merged predictions:** accepted PRs in contexts that look risky, especially busier/larger repositories.
+- This is why the final answer stays bounded to **moderate association**.
+
+</div>
+</div>
+
+Error analysis strengthens the conclusion because it explains failure modes instead of hiding them.
+
+---
+
+## Split Overlap and Validation-Test Gap
+
+| Entity | Test unique overlap | Test rows with seen entity |
 |---|---:|---:|
-| Accuracy | `0.811` | `0.869` |
-| Balanced accuracy | `0.673` | `0.649` |
-| Not-merged precision | `0.285` | `0.390` |
-| Not-merged recall | `0.497` | `0.367` |
-| Not-merged F1 | `0.362` | `0.378` |
-| ROC-AUC | `0.736` | `0.736` |
-| Not-merged average precision | `0.358` | `0.358` |
+| PR id | 0.00% | 0.00% |
+| Project | 94.91% | 97.85% |
+| Creator | 69.39% | 84.09% |
 
-Interpretation:
+| Evaluation | Threshold | Not-merged F1 | Average precision |
+|---|---|---:|---:|
+| Validation | default | 0.372 | 0.388 |
+| Validation | tuned | 0.405 | 0.388 |
+| Official test | default | 0.314 | 0.301 |
+| Official test | tuned | 0.326 | 0.301 |
 
-- Default threshold finds more not-merged PRs but creates more false alarms.
-- Tuned threshold improves not-merged precision and F1, while lowering not-merged recall.
-- Both rows must be reported because the tuned threshold is a validation decision, not a new model.
+The official holdout has clean PR ids, but it is not an unseen-project or unseen-creator test.
 
 ---
 
-## 13. Confidence Intervals
+## Generalization Stress Tests
 
-Bootstrap confidence intervals use `500` resamples of final test predictions.
+Sampled stress tests, each using the same headline feature policy:
+
+| Stress test | Balanced acc. | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|
+| Random stratified | 0.684 | 0.258 | 0.566 | 0.354 |
+| Temporal last 25% | 0.610 | 0.196 | 0.342 | 0.250 |
+| Project-group holdout | 0.593 | 0.185 | 0.381 | 0.249 |
+| Creator-group holdout | 0.641 | 0.227 | 0.479 | 0.308 |
+
+Stress tests are the external-validity reality check: the signal weakens for later or unseen-project-like validation.
+
+---
+
+## Larger Generalization Benchmarks
+
+![h:260px](../deliverables/final/figures/full_generalization_benchmarks.png)
+
+| Benchmark | Train rows | Eval rows | F1 | AP |
+|---|---:|---:|---:|---:|
+| Official test | 1,045,883 | 260,195 | 0.314 | 0.301 |
+| Temporal holdout | 375,000 | 125,000 | 0.246 | 0.197 |
+| Project holdout | 372,830 | 127,170 | 0.312 | 0.249 |
+| Creator holdout | 375,150 | 124,850 | 0.312 | 0.276 |
+
+The sampled and larger holdouts are different diagnostics, so the exact values need not match.
+
+The shared conclusion is stable: the official split is useful, but stricter holdouts change the story.
+
+---
+
+## Threshold and Model Robustness
+
+What this slide defends:
+
+| Concern | Evidence |
+|---|---|
+| One lucky threshold | repeated sampled folds select thresholds from 0.542 to 0.564 |
+| One lucky model split | model families are compared under random, temporal, project, and creator splits |
+| Random Forest vs HGB | paired validation delta: +0.035 F1, 95% CI +0.033 to +0.037 |
+| Absolute winner claim | not made; HGB narrowly leads the project-group diagnostic |
+
+The submitted model remains Random Forest because the selection rule was declared before test scoring.
+
+---
+
+## Uncertainty: Row vs Project-Cluster Bootstrap
 
 Tuned-threshold 95% intervals:
 
-| Metric | Estimate | 95% CI |
-|---|---:|---:|
-| Not-merged precision | `0.390` | `0.384` to `0.396` |
-| Not-merged recall | `0.367` | `0.362` to `0.373` |
-| Not-merged F1 | `0.378` | `0.373` to `0.383` |
-| Balanced accuracy | `0.649` | `0.646` to `0.652` |
-| ROC-AUC | `0.735` | `0.732` to `0.739` |
+| Metric | Estimate | Row bootstrap | Project-cluster bootstrap |
+|---|---:|---:|---:|
+| Precision, not merged | 0.296 | 0.290 to 0.300 | 0.265 to 0.327 |
+| Recall, not merged | 0.364 | 0.358 to 0.370 | 0.323 to 0.408 |
+| F1, not merged | 0.326 | 0.321 to 0.331 | 0.296 to 0.360 |
+| Balanced accuracy | 0.629 | 0.626 to 0.632 | 0.611 to 0.650 |
 
-Interpretation:
-
-- The model has real predictive signal, but the intervals do not make it operationally reliable.
-- The precision/recall tradeoff is the honest story.
+Project-cluster intervals are wider because PRs are correlated within repositories.
 
 ---
 
-## 14. Leakage Sensitivity
+## Feature-Policy Sensitivity
 
-Strict feature set removed:
+| Feature policy | Validation F1 | Test F1 | Interpretation |
+|---|---:|---:|---|
+| Ultra-conservative | 0.310 | 0.273 | strictest feature contract |
+| Headline leakage-safer | 0.372 | 0.314 | submitted result |
+| Integrator-assumed | 0.424 | 0.373 | stronger timing assumption |
+| Extended timing-assumed | 0.375 | 0.315 | little gain over headline |
+
+The strongest-looking feature policy is not the headline model because it depends on stronger availability assumptions.
+
+---
+
+## Explanation Evidence
+
+<div class="columns">
+<div>
+
+![h:300px](../deliverables/final/figures/permutation_importance.png)
+
+</div>
+<div class="small">
+
+Top permutation signals:
 
 - `open_pr_num`
-- `pr_succ_rate`
-- `requester_succ_rate`
-- `test_churn`
+- `fork_num`
+- `open_issue_num`
+- `account_creation_days`
+- `followers`
+- `project_age`
+- `sloc`
+- `test_lines_per_kloc`
+- `ci_exists`
+- `contrib_perc_commit`
 
-| Evaluation | Primary F1 | Strict F1 | Primary balanced accuracy | Strict balanced accuracy |
-|---|---:|---:|---:|---:|
-| Validation | `0.399` | `0.391` | `0.704` | `0.699` |
-| Test | `0.362` | `0.354` | `0.673` | `0.667` |
+</div>
+</div>
 
-Takeaway:
-
-- The conclusion survives stricter timing assumptions, but slightly weakens.
-- This makes the final claim more credible: PR metadata has signal, but timing-sensitive project snapshots should be defended carefully.
+Permutation importance and ablation are explanation diagnostics, not causal evidence.
 
 ---
 
-## 15. Sample-Size Sensitivity
+## Feature-Family Ablation
 
-Selected model trained at three stratified sample sizes:
+Validation sample ablation against the full headline feature policy:
 
-| Training sample | Validation balanced accuracy | Validation not-merged F1 | Not-merged AP |
+| Removed family | Not-merged F1 | Delta F1 | Avg precision delta |
 |---|---:|---:|---:|
-| `100,000` | `0.693` | `0.385` | `0.377` |
-| `260,000` | `0.704` | `0.399` | `0.405` |
-| `500,000` | `0.715` | `0.413` | `0.427` |
+| None | 0.354 | 0.000 | 0.000 |
+| Contributor history | 0.335 | -0.019 | -0.020 |
+| Project context | 0.324 | -0.030 | -0.040 |
+| PR scope | 0.354 | -0.001 | +0.007 |
+| Testing/CI context | 0.342 | -0.012 | -0.014 |
+| Language/calendar | 0.354 | 0.000 | -0.003 |
 
-Interpretation:
-
-- More data improves validation performance.
-- The submitted model remains sample-based for runtime, but this check shows the direction of improvement is sensible.
-
----
-
-## 16. Feature Importance
-
-Top Random Forest signals:
-
-1. `prior_review_num`
-2. `contrib_perc_commit`
-3. `open_pr_num`
-4. `pr_succ_rate`
-5. `sloc`
-6. `fork_num`
-7. `stars`
-8. `test_lines_per_kloc`
-9. `prior_interaction`
-10. `prev_pullreqs`
-
-Interpretation:
-
-- The model relies most on contributor history, project/repository context, and project size/activity signals.
-- No identifier or clear post-outcome leakage field appears in the final feature set.
-- Some high-importance fields are exactly why the strict-feature sensitivity analysis matters.
+Project context and contributor history are the most important feature families in this diagnostic.
 
 ---
 
-## 17. Unsupervised Analysis
+## Unsupervised PR Profiles
 
-Goal:
-
-- Explore interpretable PR profiles without using the merge target during fitting.
-
-Method:
-
-- Standardize safe features.
-- Fit K-means for `k = 2..6`.
-- Choose `k = 2` by silhouette score.
-- Use PCA only for visualization.
-- Profile clusters after fitting using merge-rate composition.
-- PCA is visualization only; the first two components explain `25.6%` of transformed variance.
-
----
-
-## 18. Cluster Findings
+![h:320px](../deliverables/final/figures/cluster_pca.png)
 
 | Cluster | Size | Merge rate | Not-merged rate | Profile |
 |---|---:|---:|---:|---|
-| 0 | `66,400` | `89.56%` | `10.44%` | lower not-merged / larger-change / smaller-project |
-| 1 | `3,600` | `81.83%` | `18.17%` | higher not-merged / smaller-change / larger-project |
+| 0 | 67,183 | 89.57% | 10.43% | lower not-merged / larger-change / smaller-project |
+| 1 | 2,817 | 79.45% | 20.55% | higher not-merged / smaller-change / larger-project |
 
-Discussion:
-
-- Clustering is descriptive, not a separate prediction model.
-- The smaller cluster has a noticeably higher not-merged rate, suggesting project/profile context matters.
-- Because silhouette chose `k = 2` and one cluster dominates, this is useful interpretation rather than strong evidence of naturally separated groups.
+K-means/PCA is a profile analysis, not a second classifier.
 
 ---
 
-## 19. Direct Answer
+## Assignment Coverage
 
-Research question: Can PR-level features help explain and predict PR merge outcomes on GitHub?
+| Criterion | Evidence |
+|---|---|
+| Problem clarity | question, target, scope, feature-availability contract |
+| EDA | concrete findings, imbalance, concentration, class-conditioned patterns |
+| Empirical study | contracts, baselines, final test, calibration, holdouts, paired deltas |
+| Algorithm comprehension | role and limitation table for every method |
+| Data characteristics | missingness, skew/outliers, leakage timing, split overlap, comment join limit |
+| Findings/report/slides | final notebook, report PDF, generated metrics, discussion deck |
 
-Answer:
-
-- Yes, but the signal is moderate.
-- The model beats the majority baseline on imbalance-aware metrics.
-- The best explanation is not "we can predict merges perfectly"; it is "contributor history, project context, and PR size/scope contain measurable signal."
-- The strict-feature sensitivity check shows the result is not entirely forced by questionable timing fields.
-- Findings support association and prediction, not causality.
-
----
-
-## 20. Threats to Validity
-
-- Leakage risk: some fields may only be known after review or closure.
-- Temporal ambiguity: comment, CI, sentiment, and interaction fields may depend on when prediction is made.
-- Class imbalance: minority-class performance can be hidden by high accuracy.
-- Sampling: models were trained on a stratified sample for runtime, then evaluated on the full test split.
-- Generalizability: results apply to this PRFeatures GitHub sample.
-- Feature encoding: `language` is categorical and should not be read as an ordered number.
+Full evidence map: `deliverables/final/assignment_coverage.csv`
 
 ---
 
-## 21. Discussion Prep
+## Threats to Validity
 
-Likely questions and short answers:
+- Feature timing is the main risk; risky fields are excluded or sensitivity-only.
+- The official split has heavy project and creator overlap.
+- Review-process features improve metrics but are not early-prediction features.
+- The comment dataset is profiled, not force-joined, because local join keys do not match.
+- Random Forest explanations are predictive, not causal.
+- The model is not ready for deployment or automated PR decisions.
 
-- Why not use all 72 columns?  
-  Because identifiers, post-outcome fields, and timing-sensitive fields risk leakage.
+Professor-facing bottom line: the analysis is stronger because it admits these limits directly.
 
-- Why is accuracy not enough?  
-  The dummy model reaches `0.892` validation accuracy but detects no not-merged PRs.
+---
 
-- What metric drove selection?  
-  Not-merged F1, with balanced accuracy and not-merged average precision as supporting metrics.
+## Final Answer
 
-- Can we claim large PRs are less likely to merge?  
-  We can claim association in this dataset, not causation.
+The project does answer the chosen question.
 
-- Are clusters predictive?  
-  No. They describe PR profiles and support interpretation.
+<div class="metric">Signal depends on when prediction is made.</div>
 
-- Did threshold tuning use the test split?  
-  No. The threshold was selected on validation data and then applied once to the test split.
+- Early T1 submitted-diff test F1: **0.314** default, **0.326** tuned.
+- T2 review-process test F1: **0.436**, but it uses later information.
+- Calibration can make probabilities honest; it does not make decisions reliable.
+- Larger holdouts show the official split is not the whole generalization story.
+- The right conclusion is empirical association, not causality or automation.
 
-- Does the result disappear under stricter leakage assumptions?  
-  No. Test not-merged F1 drops from `0.362` to `0.354`, so the conclusion weakens slightly but survives.
+Q&A framing: stronger metrics come from later information, not from pretending the early model is better.

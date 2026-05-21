@@ -1,0 +1,8 @@
+check,value,interpretation
+train_rows,1045883,Training PR rows loaded for id-integrity audit.
+train_unique_ids,1045883,Unique PR ids in the training split.
+train_duplicate_ids,0,Duplicate PR ids inside the training split.
+test_rows,260195,Official test PR rows loaded for id-integrity audit.
+test_unique_ids,260195,Unique PR ids in the official test split.
+test_duplicate_ids,0,Duplicate PR ids inside the official test split.
+train_test_id_overlap,0,Exact PR ids shared by the train and test files.

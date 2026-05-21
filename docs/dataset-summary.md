@@ -16,6 +16,8 @@ Final-package note:
 - Checkpoint 1 remains the historical scope lock for the first milestone.
 - The final notebooks extend that scope with leakage-aware supervised modeling, imbalance-aware evaluation, and K-means/PCA clustering in `deliverables/final/`.
 - The final modeling contract is: use only fields treated as available at PR submission, as historical/project snapshots before the current PR outcome, or as initial PR-diff features before closure. If a future source audit shows any retained field includes post-closure information, it should move to the timing-sensitive group.
+- `prior_review_num` is not part of the headline feature policy anymore. It is kept as a reviewer/integrator-context sensitivity feature because using it in an early-information model requires a stronger availability assumption than contributor/project snapshots.
+- Final interpretation should say "moderate predictive association," not causality or automation readiness.
 
 ## Files
 
@@ -32,7 +34,7 @@ Sample columns include:
 - `merged_or_not`
 - `first_pr`
 - `core_member`
-- `prior_review_num`
+- `prior_review_num` (sensitivity only in the final headline analysis)
 - `team_size`
 - `language`
 - `open_issue_num`
@@ -48,7 +50,8 @@ Sample columns include:
 
 - about 88 MB
 - verified shape: `260,195` rows and `72` columns
-- natural holdout set for final validation if the project uses the PRFeatures split as provided
+- official holdout set for final evaluation
+- not a clean unseen-project or unseen-creator benchmark; the final package reports overlap and stress-test diagnostics
 
 ### `pr_comments_dataset_publish.csv`
 
@@ -60,7 +63,7 @@ Sample columns include:
 ### `survey_responses_raw.csv`
 
 - about 23 KB
-- 22 survey responses
+- small survey-response file; the final raw fingerprint records 22 parsed data rows
 - excluded as the project basis
 - not part of the Checkpoint 1 workflow
 
@@ -69,7 +72,7 @@ Sample columns include:
 - use `prfeatures_train_data.csv` as the main dataset
 - use `prfeatures_test_data.csv` only for schema and target consistency checks
 - exclude the comments dataset for now
-- do not base the project on the 22-row survey file
+- do not base the project on the small survey file
 
 ## Verified Target Facts
 
@@ -86,53 +89,28 @@ Implication:
 
 - the target is strongly imbalanced and later evaluation must account for that
 
-## Recommended Analytical Framing
+## Final Analytical Framing
 
 ### Descriptive track
 
-- summary statistics for the PR-level dataset
-- feature distributions
-- merged vs. not merged comparisons
-- correlation analysis on numeric fields
-- leakage-aware feature review before any predictive claims
+- target imbalance and majority-baseline risk
+- class-conditioned contributor/project context
+- project and creator concentration
+- heavy-tailed numeric features and target-association diagnostics
+- leakage-aware feature review before predictive claims
 
 ### Supervised track
 
-Primary option:
-
 - classification on `merged_or_not`
-
-Good baseline models:
-
-- logistic regression
-- decision tree
-- random forest
-- gradient boosting or XGBoost if allowed
-
-Evaluation ideas:
-
-- train/validation split or cross-validation on the training file
-- final check on `prfeatures_test_data.csv`
-- accuracy, precision, recall, F1, ROC-AUC
-- confusion matrix
+- dummy, logistic regression, decision tree, random forest, and histogram gradient boosting comparisons
+- primary model-selection metric: not-merged F1
+- final official test metrics plus threshold tuning, confidence intervals, validation-test gap, and stress tests
 
 ### Unsupervised track
 
-Good options:
-
-- cluster PRs by review/process characteristics
-- cluster aggregated PR-comment behavior
-- use PCA or UMAP only for visualization, not as the main result by itself
-
-Checkpoint 1 note:
-
-- do not start this track yet; first finish schema auditing, target audit, conservative feature screening, and initial EDA
-
-Baseline algorithms:
-
-- K-means
-- hierarchical clustering
-- DBSCAN if density-based structure seems plausible
+- K-means on headline PR-level features for profile discovery only
+- PCA for visualization only
+- target is used after fitting for profile interpretation, not for cluster fitting
 
 ## Risks To Watch
 

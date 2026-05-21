@@ -1,0 +1,8 @@
+algorithm,role,why_used,main_limitation
+Dummy majority,Baseline,Shows why raw accuracy is misleading under class imbalance.,Detects no not-merged PRs.
+Logistic regression balanced,Linear supervised model,Interpretable weighted baseline for directional linear signal.,Cannot model non-linear feature interactions well.
+Decision tree balanced,Interpretable non-linear baseline,Captures threshold rules and gives a simple tree-based comparison.,Can be unstable; depth is constrained to reduce overfitting.
+Random forest balanced,Selected supervised model,Averages many class-balanced trees and performed best by validation not-merged F1.,Impurity importance is not causal and can favor high-cardinality/continuous features.
+Histogram gradient boosting weighted,Boosted supervised comparator,Sequentially improves weak learners with class-balanced sample weights.,Higher recall/AP in some diagnostics but lower declared primary F1 than the selected model.
+K-means,Unsupervised profiling,Groups PRs by feature similarity without using the target.,Assumes compact clusters and is sensitive to scaling.
+PCA,Visualization only,Projects high-dimensional cluster features into two dimensions for inspection.,Two components explain only part of the transformed variance.

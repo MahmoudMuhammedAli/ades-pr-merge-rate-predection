@@ -1,0 +1,9 @@
+finding,evidence,interpretation
+Class imbalance drives metric choice,"Merged PRs: 932,538 (89.16%); not merged: 113,345 (10.84%).",Accuracy-only evaluation would reward the majority class and hide not-merged failures.
+First-time contributors have visibly higher non-merge rates,First PR not-merged rate 19.32% vs 10.55% for non-first PRs.,"Contributor history is a meaningful association, not a causal claim."
+Core-member status separates outcomes,Non-core not-merged rate 17.44% vs 9.21% for core members.,Role/context features help explain why contributor-history features matter.
+Merged PRs come from contributors with deeper prior project history,Median previous PRs: 22 for not-merged vs 41 for merged; median contribution share 0.028 vs 0.099.,The model's reliance on contributor-history signals is consistent with EDA.
+Non-merged PRs are associated with larger or busier project contexts,Median open PRs: 22 for not-merged vs 12 for merged; median stars 289 vs 130.,"Project context is predictive, but it also raises external-validity and clustering concerns."
+CI presence is associated with a lower non-merge rate,CI-present not-merged rate 9.91% vs 12.95% when no CI is recorded.,CI is treated as context only; CI outcome fields remain excluded from the headline model.
+Rows are concentrated in recurring projects and creators,Top 500 projects contain 52.03% of train rows; top 500 creators contain 21.65%.,This supports project/creator overlap checks and stricter group-holdout stress tests.
+"Language-code groups differ, but labels are encoded",Highest not-merged language code 1: 13.97%; lowest code 0: 9.30%.,"Language is useful as nominal project metadata, not as an ordinal numeric scale."

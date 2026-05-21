@@ -27,7 +27,7 @@ Use prompts like these during the semester:
 - "Build a Colab cell to load this CSV efficiently and print a schema summary."
 - "Review this preprocessing plan and point out leakage or weak assumptions."
 - "Suggest 5 useful EDA plots for this dataset and write the code."
-- "Compare logistic regression, random forest, and XGBoost for this target."
+- "Compare logistic regression, random forest, and histogram gradient boosting for this target."
 - "Help me explain these results in report language for the notebook."
 - "Turn these findings into 5 presentation-slide bullets."
 
