@@ -1,0 +1,7 @@
+pipeline_step,columns_or_scope,method,reason,implementation_note
+numeric features,"continuous counts, rates, age, size, and churn fields",median imputation followed by StandardScaler,Median imputation is robust to skew; scaling supports logistic regression and distance-based diagnostics.,Implemented inside sklearn ColumnTransformer.
+binary features,"first_pr, core_member, test_inclusion, ci_exists, friday_effect",most-frequent imputation,Binary flags need stable missing-value handling without imposing numeric scaling.,Implemented inside sklearn ColumnTransformer.
+categorical language feature,language,most-frequent imputation plus OneHotEncoder(handle_unknown='ignore'),Language is nominal and future/validation categories should not break inference.,Encoded in the categorical branch of the ColumnTransformer.
+model wrapping,all supervised models,sklearn Pipeline,Keeps preprocessing fit on training folds/splits only.,Each candidate model is wrapped with the same preprocessing contract.
+class imbalance,supervised model fitting,class_weight='balanced' or balanced sample weights where supported,Merged PRs dominate; the minority not-merged class is the evaluation focus.,Dummy majority remains unweighted to show the raw-accuracy trap.
+split discipline,model and threshold selection,internal validation for Checkpoint 2 selection; official test reserved for final reporting,Avoids using the official test split as a tuning target.,Checkpoint 2 headline metrics come from full-source internal validation artifacts.

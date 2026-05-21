@@ -1,0 +1,13 @@
+topic,evidence,checkpoint2_implication,source_artifact
+train rows,"1,045,883",Large enough for internal validation and stratified modeling.,data_quality_summary.csv
+test rows,"260,195",Reserved for final evaluation; not used for Checkpoint 2 model or threshold selection.,data_quality_summary.csv
+number of columns,68 analysis columns loaded; project README documents 72 PRFeatures columns in the raw train/test files.,The milestone focuses on a curated feature policy rather than all raw fields.,data_quality_summary.csv; README.md
+target variable,"merged_or_not, where 1 means merged and 0 means not merged.",The minority class of interest is not-merged PRs.,README.md; target_distribution_summary.csv
+merged/not-merged rate,Train: 89.16% merged / 10.84% not merged; test: 89.19% merged / 10.81% not merged.,"The task is strongly imbalanced, so minority-class metrics matter more than raw accuracy.",target_distribution_summary.csv
+explicit null/missingness,0 explicit null cells in train and 0 in test.,Explicit nulls are not the main issue; semantic missingness from source preprocessing remains a limitation.,data_quality_summary.csv
+duplicates,0 duplicate loaded rows in train and 0 in test.,No duplicate-row correction is needed for the loaded modeling frame.,data_quality_summary.csv
+categorical and high-cardinality handling,language is treated as nominal; project/creator/PR identifiers are excluded.,"One-hot language encoding is kept, while identifiers are excluded to reduce memorization risk.",prediction_contract_feature_map.csv; feature_timing_summary.csv
+heavy-tailed numeric variables,"19 modeled variables flagged extreme_tail; examples: prior_interaction, followers, prev_pullreqs, account_creation_days, contrib_perc_commit.",Median imputation and scaling support linear baselines; tree models handle skew more naturally.,numeric_distribution_summary.csv
+project/creator overlap,97.85% of test rows have a seen project; 84.09% have a seen creator.,Official split is not an unseen-project test; Checkpoint 2 should use internal validation for selection.,split_overlap_summary.csv
+project concentration,Top 500 train projects cover 52.03% of train rows.,Repository-level concentration motivates later generalization stress tests.,project_creator_concentration.csv
+why raw accuracy is insufficient,"Dummy majority validation accuracy is 0.892, but not-merged F1 is 0.000.","Checkpoint 2 leads with not-merged F1, recall, balanced accuracy, and average precision.",model_comparison.csv

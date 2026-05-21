@@ -1,0 +1,3 @@
+cluster,pr_count,merge_rate,not_merged_rate,median_churn_addition,median_churn_deletion,median_description_length,median_team_size,median_stars,median_open_pr_num,cluster_label,interpretation
+0,67183,89.57,10.43,17.0,5.0,20.0,6.0,123.0,12.0,lower not-merged / larger-change / smaller-project,"Cluster 0 groups lower not-merged / larger-change / smaller-project PRs. It contains 67,183 sampled PRs with a 10.43% not-merged rate."
+1,2817,79.45,20.55,15.0,5.0,42.0,51.0,21147.0,314.0,higher not-merged / smaller-change / larger-project,"Cluster 1 groups higher not-merged / smaller-change / larger-project PRs. It contains 2,817 sampled PRs with a 20.55% not-merged rate."

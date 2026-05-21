@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from textwrap import dedent
 
@@ -1962,128 +1963,233 @@ def checkpoint2_cells() -> list[nbf.NotebookNode]:
             """
             # Checkpoint 2: PR Merge Outcome Modeling
 
-            This notebook turns the Checkpoint 1 audit into a reproducible modeling baseline. It keeps the scope deliberately conservative: only PR-level features judged plausibly available before the final merge decision are used, while identifiers, clear post-outcome fields, and unresolved timing-sensitive variables remain excluded.
+            This executed milestone notebook summarizes the Checkpoint 2 package for the FEUP Data Analysis in Software Engineering project. It reads the Checkpoint 2 CSV and PNG artifacts generated from the already validated final outputs, so it is fast to execute and does not retrain models.
             """
         ),
         md(
             """
-            ## Objective and scope
+            ## 1. Title and Checkpoint 2 objective
 
             **Research question:** Can PR-level features help explain and predict PR merge outcomes on GitHub?
 
-            Checkpoint 2 focuses on the first serious supervised baseline. The provided test split is still reserved for the final evaluation; this notebook uses an internal validation split from the training file.
+            Checkpoint 2 demonstrates that the project now has a reproducible, leakage-aware, imbalance-aware baseline modeling pipeline. The headline evidence in this notebook is internal validation, not official test-set reporting.
             """
         ),
         code(COMMON_SETUP),
         code(
             """
-            print(f"Project root: {PROJECT_ROOT}")
-            print(f"Train path exists: {TRAIN_PATH.exists()}")
-            print(f"Test path exists: {TEST_PATH.exists()}")
+            from IPython.display import Image
+
+            CP2_DIR = CHECKPOINT2_DIR
+            CP2_FIGURE_DIR = CP2_DIR / "figures"
+
+            def read_cp2(filename: str) -> pd.DataFrame:
+                path = CP2_DIR / filename
+                if not path.exists():
+                    raise FileNotFoundError(f"Missing Checkpoint 2 artifact: {path}")
+                return pd.read_csv(path)
+
+            model_comparison = read_cp2("checkpoint2_model_comparison.csv")
+            target_distribution_cp2 = read_cp2("checkpoint2_target_distribution.csv")
+            data_characteristics = read_cp2("checkpoint2_data_characteristics_summary.csv")
+            feature_contract = read_cp2("checkpoint2_feature_availability_contract.csv")
+            preprocessing_summary = read_cp2("checkpoint2_preprocessing_summary.csv")
+            algorithm_rationale = read_cp2("checkpoint2_algorithm_rationale.csv")
+            validation_confusion = read_cp2("checkpoint2_validation_confusion_matrix.csv")
+            threshold_tuning = read_cp2("checkpoint2_threshold_tuning.csv")
+            feature_importance_cp2 = read_cp2("checkpoint2_feature_importance.csv")
+            cluster_profile_cp2 = read_cp2("checkpoint2_cluster_profile.csv")
+            cluster_interpretation_cp2 = read_cp2("checkpoint2_cluster_interpretation.csv")
+
+            display(Markdown(
+                f"Loaded Checkpoint 2 artifacts from `{CP2_DIR.relative_to(PROJECT_ROOT)}`. "
+                f"Model comparison rows: `{len(model_comparison)}`."
+            ))
             """
         ),
         md(
             """
-            ## Leakage-aware feature set
+            ## 2. What changed since Checkpoint 1
 
-            The model uses the headline leakage-safer feature policy carried into the final notebook. `language` is treated as a categorical code, not a rank. Review/process variables, close-time PR evolution fields, and target-adjacent success-rate fields whose timing is unclear stay out of this checkpoint model.
+            Since Checkpoint 1, the target has been locked, data characteristics have been audited, a feature-availability policy has been made explicit, baseline and stronger supervised models have been evaluated, and remaining final-submission work has been separated from Checkpoint 2 evidence.
             """
         ),
         code(
             """
-            feature_groups = pd.DataFrame(
+            progress = pd.DataFrame(
                 [
-                    {"group": "Identifiers", "count": len(exclude_ids), "use": "Excluded"},
-                    {"group": "Post-outcome leakage", "count": len(exclude_post_outcome), "use": "Excluded"},
-                    {"group": "Timing-sensitive under review", "count": len(ambiguous_features), "use": "Held back"},
-                    {"group": "Headline leakage-safer modeling features", "count": len(headline_safe_features), "use": "Used now"},
-                    {"group": "Integrator-assumed extension features", "count": len(integrator_assumed_extension_features), "use": "Held for sensitivity"},
-                    {"group": "Timing-assumed extension features", "count": len(timing_assumed_extension_features), "use": "Held for sensitivity"},
+                    {"area": "Dataset understanding", "checkpoint2_status": "PRFeatures train/test rows and class balance documented."},
+                    {"area": "Target", "checkpoint2_status": "`merged_or_not` is locked; not-merged is the minority class of interest."},
+                    {"area": "Feature policy", "checkpoint2_status": "Headline leakage-safer features separated from excluded, sensitivity-only, and T2 review-process fields."},
+                    {"area": "Modeling", "checkpoint2_status": "Dummy, balanced linear/tree baselines, random forest, and HGB compared on internal validation."},
+                    {"area": "Remaining work", "checkpoint2_status": "Official test reporting, calibration, stress tests, and final slides remain final-submission work."},
                 ]
             )
-            safe_feature_table = pd.DataFrame(
-                {
-                    "feature": headline_safe_features,
-                    "availability_rationale": [availability_reason(feature) for feature in headline_safe_features],
-                }
-            )
-            display(feature_groups)
-            display(safe_feature_table)
-            """
-        ),
-        md("## Load the training split and audit the target"),
-        code(
-            """
-            train_df = pd.read_csv(TRAIN_PATH, usecols=safe_usecols, low_memory=False)
-            test_header = pd.read_csv(TEST_PATH, nrows=0)
-
-            audit_summary = pd.DataFrame(
-                [
-                    {"check": "training rows loaded", "result": f"{len(train_df):,}"},
-                    {"check": "headline leakage-safer feature columns", "result": len(headline_safe_features)},
-                    {"check": "target present", "result": TARGET_COLUMN in train_df.columns},
-                    {"check": "explicit nulls in modeling frame", "result": int(train_df.isna().sum().sum())},
-                    {"check": "duplicate rows in modeling frame", "result": int(train_df.duplicated().sum())},
-                    {"check": "test schema contains target", "result": TARGET_COLUMN in test_header.columns},
-                ]
-            )
-            display(audit_summary)
-            display(target_distribution(train_df, "train"))
-            """
-        ),
-        md("## Baseline model comparison"),
-        code(
-            """
-            MODEL_SAMPLE_SIZE = 220_000
-            comparison, fitted_models, validation_data = fit_and_compare(train_df, MODEL_SAMPLE_SIZE)
-            display(comparison)
-
-            fig, ax = plt.subplots(figsize=(10, 5))
-            plot_df = comparison.melt(
-                id_vars="model",
-                value_vars=["balanced_accuracy", "f1_not_merged", "average_precision_not_merged"],
-                var_name="metric",
-                value_name="score",
-            )
-            sns.barplot(data=plot_df, x="score", y="model", hue="metric", ax=ax)
-            ax.set_title("Checkpoint 2 validation comparison on a stratified training sample")
-            ax.set_xlim(0, 1)
-            ax.set_xlabel("Score")
-            ax.set_ylabel("")
-            plt.tight_layout()
-            plt.show()
+            display(progress)
             """
         ),
         md(
             """
-            ## Interpretation for Checkpoint 2
+            ## 3. Dataset and target
 
-            The dummy classifier is expected to look deceptively strong on raw accuracy because merged PRs dominate the dataset. For grading and scientific credibility, the minority-class metrics are more informative: recall and F1 for not-merged PRs, balanced accuracy, and average precision for the not-merged class.
+            The main PRFeatures task uses `merged_or_not`: `1` means merged and `0` means not merged. The not-merged class is the minority class and is the main evaluation focus. Accuracy alone is misleading because a majority classifier can predict merged for every PR and still look strong on raw accuracy.
             """
         ),
         code(
             """
-            best_row = comparison.iloc[0]
+            display(target_distribution_cp2)
+            display(Image(filename=str(CP2_FIGURE_DIR / "checkpoint2_target_distribution.png")))
+            """
+        ),
+        md(
+            """
+            ## 4. Data characteristics relevant to modeling
+
+            Checkpoint 2 makes the data characteristics visible before presenting model metrics: class imbalance, explicit nulls, duplicates, skew, categorical handling, project/creator overlap, and the raw-accuracy trap.
+            """
+        ),
+        code(
+            """
+            display(data_characteristics)
+            """
+        ),
+        md(
+            """
+            ## 5. Feature availability contract
+
+            The headline supervised model uses leakage-safer features under stated timing assumptions. The wording is intentionally cautious: leakage-safer does not mean perfectly safe. `prior_review_num` is sensitivity-only, and T2 review-process features are separate later-stage analysis fields.
+            """
+        ),
+        code(
+            """
+            headline_count = int(model_comparison.iloc[0]["feature_count"])
+            display(feature_contract)
+            display(Image(filename=str(CP2_FIGURE_DIR / "checkpoint2_feature_policy_summary.png")))
             display(Markdown(f'''
-            **Checkpoint 2 finding.** The strongest validation baseline by not-merged F1 is **{best_row["model"]}**.
+            **Headline feature subset count:** `{headline_count}` leakage-safer features.
 
-            - Not-merged F1: `{best_row["f1_not_merged"]:.3f}`
-            - Not-merged recall: `{best_row["recall_not_merged"]:.3f}`
-            - Balanced accuracy: `{best_row["balanced_accuracy"]:.3f}`
-            - Not-merged average precision: `{best_row["average_precision_not_merged"]:.3f}`
-
-            The next checkpoint should lock the final feature set, run the selected model against the untouched test split, and add one unsupervised analysis that profiles PR groups without using the target during clustering.
+            **Important timing note:** `prior_review_num` is not part of the headline model; it is sensitivity-only because reviewer/integrator availability is ambiguous before the final merge decision.
             '''))
             """
         ),
         md(
             """
-            ## Checkpoint 2 limitations
+            ## 6. Preprocessing pipeline
 
-            - This is a validation baseline, not the final model.
-            - The provided test split is intentionally not used here.
-            - Timing-sensitive discussion, CI, and sentiment fields are still held back until their availability at prediction time can be defended.
-            - The baseline uses a stratified sample for runtime; the final notebook should report the sample size and evaluate on the full provided test split.
+            The preprocessing is implemented with sklearn `Pipeline` and `ColumnTransformer`. Numeric, binary, and categorical branches are handled separately so every model sees the same train-only fitted preprocessing steps.
+            """
+        ),
+        code(
+            """
+            display(preprocessing_summary)
+            """
+        ),
+        md(
+            """
+            ## 7. Models evaluated
+
+            The model set connects directly to the course criteria: a dummy baseline, a linear baseline, an interpretable tree, stronger tree ensembles, and a short optional unsupervised profile analysis.
+            """
+        ),
+        code(
+            """
+            display(algorithm_rationale)
+            """
+        ),
+        md(
+            """
+            ## 8. Validation comparison
+
+            The pre-declared Checkpoint 2 selection metric is validation not-merged F1. Balanced accuracy and average precision are shown as supporting imbalance-aware metrics. The official test split is not used for model or threshold selection here.
+            """
+        ),
+        code(
+            """
+            comparison_cols = [
+                "model",
+                "training_scope",
+                "training_rows",
+                "validation_rows",
+                "accuracy",
+                "balanced_accuracy",
+                "precision_not_merged",
+                "recall_not_merged",
+                "f1_not_merged",
+                "average_precision_not_merged",
+            ]
+            display(model_comparison[comparison_cols])
+            display(Image(filename=str(CP2_FIGURE_DIR / "checkpoint2_model_comparison_f1.png")))
+            display(Image(filename=str(CP2_FIGURE_DIR / "checkpoint2_model_comparison_balanced_accuracy.png")))
+
+            best_row = model_comparison.iloc[0]
+            display(Markdown(f'''
+            **Checkpoint 2 validation leader:** `{best_row["model"]}`.
+
+            - Validation not-merged F1: `{best_row["f1_not_merged"]:.3f}`
+            - Validation not-merged recall: `{best_row["recall_not_merged"]:.3f}`
+            - Validation balanced accuracy: `{best_row["balanced_accuracy"]:.3f}`
+            - Validation not-merged average precision: `{best_row["average_precision_not_merged"]:.3f}`
+            '''))
+            """
+        ),
+        md(
+            """
+            ## 9. Confusion matrix and threshold discussion
+
+            The validation confusion matrix shows the practical tradeoff: false positives are merged PRs flagged as not-merged risk, while false negatives are not-merged PRs missed by the model. Threshold tuning is preliminary and validation-based.
+            """
+        ),
+        code(
+            """
+            display(validation_confusion[validation_confusion["model"].eq("Random forest balanced")])
+            display(Image(filename=str(CP2_FIGURE_DIR / "checkpoint2_confusion_matrix_validation.png")))
+
+            display(threshold_tuning.sort_values("f1_not_merged", ascending=False).head(10))
+            display(Image(filename=str(CP2_FIGURE_DIR / "checkpoint2_threshold_tradeoff.png")))
+            """
+        ),
+        md(
+            """
+            ## 10. Preliminary interpretation
+
+            Feature importance is treated as predictive interpretation only. It can identify feature families associated with model predictions, but it is not causal evidence.
+            """
+        ),
+        code(
+            """
+            display(feature_importance_cp2.sort_values("importance", ascending=False).head(12))
+            display(Image(filename=str(CP2_FIGURE_DIR / "checkpoint2_feature_importance.png")))
+            """
+        ),
+        md(
+            """
+            ## 11. Optional unsupervised/profile analysis
+
+            KMeans/PCA is profile discovery, not classification. Target labels are used only after fitting to describe the discovered profiles.
+            """
+        ),
+        code(
+            """
+            display(cluster_profile_cp2)
+            display(cluster_interpretation_cp2[[
+                "cluster",
+                "cluster_label",
+                "pr_count",
+                "merge_rate",
+                "not_merged_rate",
+                "two_component_explained_variance",
+            ]])
+            """
+        ),
+        md(
+            """
+            ## 12. Remaining work for final submission
+
+            Final work should report the official test split after selection is locked, add calibration, run stress tests for generalization, keep feature-timing sensitivity visible, and polish the final report and slides.
+
+            ## 13. Checkpoint 2 takeaway
+
+            We now have a reproducible, leakage-aware, imbalance-aware baseline modeling pipeline. Early PR-level features show moderate predictive signal, but the model is not causal or deployment-ready.
             """
         ),
     ]
@@ -3577,16 +3683,27 @@ def final_cells() -> list[nbf.NotebookNode]:
 
 
 def main() -> None:
-    write_notebook(
-        PROJECT_ROOT / "deliverables" / "checkpoint-2" / "checkpoint2_pr_merge_modeling.ipynb",
-        "Checkpoint 2: PR Merge Outcome Modeling",
-        checkpoint2_cells(),
+    parser = argparse.ArgumentParser(description="Build generated ADES analysis notebooks.")
+    parser.add_argument(
+        "--only",
+        choices=["checkpoint2", "final", "all"],
+        default="all",
+        help="Build only one notebook, or both notebooks by default.",
     )
-    write_notebook(
-        PROJECT_ROOT / "deliverables" / "final" / "final_pr_merge_analysis.ipynb",
-        "Final Analysis: PR Merge Outcomes on GitHub",
-        final_cells(),
-    )
+    args = parser.parse_args()
+
+    if args.only in {"checkpoint2", "all"}:
+        write_notebook(
+            PROJECT_ROOT / "deliverables" / "checkpoint-2" / "checkpoint2_pr_merge_modeling.ipynb",
+            "Checkpoint 2: PR Merge Outcome Modeling",
+            checkpoint2_cells(),
+        )
+    if args.only in {"final", "all"}:
+        write_notebook(
+            PROJECT_ROOT / "deliverables" / "final" / "final_pr_merge_analysis.ipynb",
+            "Final Analysis: PR Merge Outcomes on GitHub",
+            final_cells(),
+        )
 
 
 if __name__ == "__main__":
